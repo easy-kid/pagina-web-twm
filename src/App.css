@@ -1,184 +1,190 @@
-.counter {
-  font-size: 16px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-  margin-bottom: 24px;
-
-  &:hover {
-    border-color: var(--accent-border);
-  }
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
+:root {
+  /* Paleta exacta extraída de la maqueta de Figma */
+  --figma-canvas-bg: #232323;
+  --figma-main-bg: #d8d8d8;
+  --figma-sidebar-bg: #5a5a5a;
+  --figma-sidebar-btn: #d8d8d8;
+  --figma-sidebar-btn-hover: #ebebeb;
+  --figma-sidebar-btn-active: #ffffff;
+  --figma-top-card: #8c8c8c;
+  --figma-top-card-hover: #969696;
+  --figma-bottom-panel: #4e4e4e;
+  
+  --radius-rect: 4px;
+  --transition: all 0.18s ease;
 }
 
-.hero {
-  position: relative;
-
-  .base,
-  .framework,
-  .vite {
-    inset-inline: 0;
-    margin: 0 auto;
-  }
-
-  .base {
-    width: 170px;
-    position: relative;
-    z-index: 0;
-  }
-
-  .framework,
-  .vite {
-    position: absolute;
-  }
-
-  .framework {
-    z-index: 1;
-    top: 34px;
-    height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
-  }
-
-  .vite {
-    z-index: 0;
-    top: 107px;
-    height: 26px;
-    width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
-  }
+/* Layout General: Columna Lateral + Área Principal */
+.wireframe-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--figma-main-bg);
 }
 
-#center {
+/* 1. Barra Lateral / Sidebar (Gris #5a5a5a) */
+.wireframe-sidebar {
+  background-color: var(--figma-sidebar-bg);
+  padding: 3rem 1.25rem 2rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 25px;
-  place-content: center;
-  place-items: center;
-  flex-grow: 1;
-
-  @media (max-width: 1024px) {
-    padding: 32px 20px 24px;
-    gap: 18px;
-  }
 }
 
-#next-steps {
+.sidebar-buttons {
   display: flex;
-  border-top: 1px solid var(--border);
-  text-align: left;
-
-  & > div {
-    flex: 1 1 0;
-    padding: 32px;
-    @media (max-width: 1024px) {
-      padding: 24px 20px;
-    }
-  }
-
-  .icon {
-    margin-bottom: 16px;
-    width: 22px;
-    height: 22px;
-  }
-
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    text-align: center;
-  }
-}
-
-#docs {
-  border-right: 1px solid var(--border);
-
-  @media (max-width: 1024px) {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-}
-
-#next-steps ul {
+  flex-direction: column;
+  gap: 0.85rem;
   list-style: none;
   padding: 0;
-  display: flex;
-  gap: 8px;
-  margin: 32px 0 0;
-
-  .logo {
-    height: 18px;
-  }
-
-  a {
-    color: var(--text-h);
-    font-size: 16px;
-    border-radius: 6px;
-    background: var(--social-bg);
-    display: flex;
-    padding: 6px 12px;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    transition: box-shadow 0.3s;
-
-    &:hover {
-      box-shadow: var(--shadow);
-    }
-    .button-icon {
-      height: 18px;
-      width: 18px;
-    }
-  }
-
-  @media (max-width: 1024px) {
-    margin-top: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-
-    li {
-      flex: 1 1 calc(50% - 8px);
-    }
-
-    a {
-      width: 100%;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-  }
+  margin: 0;
 }
 
-#spacer {
-  height: 88px;
-  border-top: 1px solid var(--border);
-  @media (max-width: 1024px) {
-    height: 48px;
-  }
-}
-
-.ticks {
-  position: relative;
+/* Los 6 botones rectangulares de la maqueta (Gris claro #d8d8d8) */
+.sidebar-btn {
   width: 100%;
+  height: 48px;
+  background-color: var(--figma-sidebar-btn);
+  border: none;
+  border-radius: var(--radius-rect);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333333;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: var(--transition);
+}
 
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    top: -4.5px;
-    border: 5px solid transparent;
+.sidebar-btn:hover {
+  background-color: var(--figma-sidebar-btn-hover);
+  transform: translateX(3px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-btn.active {
+  background-color: var(--figma-sidebar-btn-active);
+  font-weight: 600;
+  box-shadow: 0 0 0 2px #ffffff, 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* 2. Área Principal de Contenido (Fondo #d8d8d8) */
+.wireframe-main {
+  background-color: var(--figma-main-bg);
+  padding: 3rem 2.5rem 2.5rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  flex: 1;
+}
+
+/* Fila Superior: 3 Cajas Rectangulares Iguales (Gris #8c8c8c) */
+.top-cards-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.75rem;
+  width: 100%;
+}
+
+.top-card {
+  background-color: var(--figma-top-card);
+  border-radius: var(--radius-rect);
+  min-height: 140px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 1.25rem;
+  color: #f5f5f5;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.top-card:hover {
+  background-color: var(--figma-top-card-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+/* Fila Inferior: Gran Panel Rectangular Ancho (Gris #4e4e4e) */
+.bottom-panel {
+  background-color: var(--figma-bottom-panel);
+  border-radius: var(--radius-rect);
+  min-height: 420px;
+  flex: 1;
+  width: 100%;
+  padding: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #f0f0f0;
+  text-align: center;
+  transition: var(--transition);
+}
+
+.panel-placeholder-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #ffffff;
+}
+
+.panel-placeholder-desc {
+  font-size: 0.9rem;
+  color: #cccccc;
+  max-width: 500px;
+  line-height: 1.5;
+}
+
+/* Adaptación Responsive */
+@media (max-width: 900px) {
+  .wireframe-layout {
+    grid-template-columns: 1fr;
   }
 
-  &::before {
-    left: 0;
-    border-left-color: var(--border);
+  .wireframe-sidebar {
+    padding: 1.5rem;
   }
-  &::after {
-    right: 0;
-    border-right-color: var(--border);
+
+  .sidebar-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .wireframe-main {
+    padding: 1.5rem;
+    gap: 1.5rem;
+  }
+
+  .top-cards-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .top-cards-row .top-card:last-child {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 580px) {
+  .sidebar-buttons {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .top-cards-row {
+    grid-template-columns: 1fr;
+  }
+
+  .top-cards-row .top-card:last-child {
+    grid-column: auto;
+  }
+
+  .bottom-panel {
+    min-height: 280px;
+    padding: 1.5rem;
   }
 }

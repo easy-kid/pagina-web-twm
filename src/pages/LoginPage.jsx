@@ -1,0 +1,150 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { LogIn, Loader2, Lock, User, AlertCircle, Activity } from 'lucide-react'
+
+export default function LoginPage() {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const { login, isAuthenticated } = useAuth()
+  const navigate = useNavigate()
+
+  // Si ya está autenticado, redirigir al Dashboard
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true })
+    }
+  }, [isAuthenticated, navigate])
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      await login(username, password)
+      navigate('/', { replace: true })
+    } catch (err) {
+      console.error('Error de autenticación:', err)
+      if (err.response?.status === 401 || err.response?.status === 422) {
+        setError('Credenciales inválidas. Por favor verifique su usuario y contraseña.')
+      } else if (err.message === 'Network Error' || !err.response) {
+        setError('No se pudo conectar con el servidor de autenticación.')
+      } else {
+        setError('Ocurrió un error inesperado al iniciar sesión.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4 py-12">
+      <div className="max-w-md w-full">
+        {/* Cabecera / Identidad */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200 mb-4">
+            <Activity className="w-8 h-8" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">ULA Monitors</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Plataforma de Monitoreo de Centros de Cultivo
+          </p>
+        </div>
+
+        {/* Tarjeta de Login */}
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 p-8">
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">Iniciar Sesión</h2>
+          <p className="text-xs text-slate-500 mb-6">
+            Ingrese sus credenciales de acceso para continuar.
+          </p>
+
+          {/* Alerta de Error */}
+          {error && (
+            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-start gap-2.5">
+              <AlertCircle className="w-5 h-5 shrink-0 text-rose-500 mt-0.5" />
+              <div className="flex-1 font-medium leading-snug">{error}</div>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Input Usuario */}
+            <div>
+              <label htmlFor="username" className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                Usuario
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <User className="w-4 h-4" />
+                </div>
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  required
+                  autoComplete="username"
+                  disabled={loading}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="ej. operador1"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            {/* Input Contraseña */}
+            <div>
+              <label htmlFor="password" className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                Contraseña
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  disabled={loading}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            {/* Botón de envío */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium text-sm rounded-xl shadow-md shadow-blue-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Validando credenciales...</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-4 h-4" />
+                  <span>Acceder al Sistema</span>
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+
+        {/* Pie de página informativo */}
+        <p className="text-center text-xs text-slate-400 mt-6">
+          API UAT: <span className="font-mono text-slate-500">ulamonitors-uat-back.grye.org</span>
+        </p>
+      </div>
+    </div>
+  )
+}
