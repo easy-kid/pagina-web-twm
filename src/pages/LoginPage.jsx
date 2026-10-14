@@ -58,9 +58,7 @@ export default function LoginPage() {
         {/* Tarjeta de Login */}
         <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 p-8">
           <h2 className="text-xl font-semibold text-slate-800 mb-2">Iniciar Sesión</h2>
-          <p className="text-xs text-slate-500 mb-6">
-            Ingrese sus credenciales de acceso para continuar.
-          </p>
+ 
 
           {/* Alerta de Error */}
           {error && (
@@ -139,11 +137,6 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-
-        {/* Pie de página informativo */}
-        <p className="text-center text-xs text-slate-400 mt-6">
-          API UAT: <span className="font-mono text-slate-500">ulamonitors-uat-back.grye.org</span>
-        </p>
       </div>
     </div>
   )
