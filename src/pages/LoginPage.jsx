@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LogIn, Loader2, Lock, User, AlertCircle, Activity } from 'lucide-react'
+import { LogIn, Loader2, Lock, User, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -12,7 +12,6 @@ export default function LoginPage() {
   const { login, isAuthenticated } = useAuth()
   const navigate = useNavigate()
 
-  // Si ya está autenticado, redirigir al Dashboard
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/', { replace: true })
@@ -42,13 +41,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4 py-12 relative transition-colors">
       <div className="max-w-md w-full">
         {/* Cabecera / Identidad */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200 mb-4">
-            <Activity className="w-8 h-8" />
-          </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">ULA Monitors</h1>
           <p className="text-sm text-slate-500 mt-1">
             Plataforma de Monitoreo de Centros de Cultivo
@@ -56,10 +52,10 @@ export default function LoginPage() {
         </div>
 
         {/* Tarjeta de Login */}
-        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 p-8">
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-200/80 p-8 transition-colors">
           <h2 className="text-xl font-semibold text-slate-800 mb-2">Iniciar Sesión</h2>
           <p className="text-xs text-slate-500 mb-6">
-            Ingrese sus credenciales de acceso para continuar.
+            Ingresa tus credenciales de operador para acceder al panel
           </p>
 
           {/* Alerta de Error */}
@@ -123,7 +119,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium text-sm rounded-xl shadow-md shadow-blue-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium text-sm rounded-xl shadow-md shadow-blue-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? (
                 <>
