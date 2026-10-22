@@ -3,19 +3,15 @@ import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/Layout/MainLayout'
 import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashboardPage'
-import SitesPage from './pages/SitesPage'
-import SiteDetailPage from './pages/SiteDetailPage'
+import DashboardView from './views/DashboardView'
+import SensorDetailView from './views/SensorDetailView'
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Ruta pública */}
           <Route path="/login" element={<LoginPage />} />
-
-          {/* Rutas protegidas bajo ProtectedRoute y MainLayout */}
           <Route
             element={
               <ProtectedRoute>
@@ -23,12 +19,9 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/sites" element={<SitesPage />} />
-            <Route path="/sites/:id" element={<SiteDetailPage />} />
+            <Route path="/" element={<DashboardView />} />
+            <Route path="/sensors/:id" element={<SensorDetailView />} />
           </Route>
-
-          {/* Redirección por defecto para rutas no encontradas */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
