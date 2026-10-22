@@ -79,7 +79,6 @@ export default function SensorDetailPage() {
               )}
             </div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{sensor?.name}</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{sensor?.type || 'Sensor de Oxígeno Disuelto'}</p>
           </div>
 
           {/* Badge de Estado Operacional */}
