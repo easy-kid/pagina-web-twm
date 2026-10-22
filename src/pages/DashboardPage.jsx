@@ -111,63 +111,7 @@ export default function DashboardPage() {
 
       {/* Tarjetas de Resumen (Clicables para navegar a los listados correspondientes) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-        {/* Total Sensores */}
-        <button
-          type="button"
-          onClick={() => handleCardClick('all')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
-            statusFilter === 'all'
-              ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-slate-950'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className={`text-xs font-semibold uppercase tracking-wider ${statusFilter === 'all' ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'}`}>
-                Total Sensores
-              </p>
-              <h3 className="text-3xl font-extrabold mt-1.5">
-                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.total}
-              </h3>
-            </div>
-            <div className={`p-2.5 rounded-xl ${statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
-              <Radio className="w-5 h-5" />
-            </div>
-          </div>
-          <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'all' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
-            Ver todos los sensores <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-          </p>
-        </button>
-
-        {/* Fuera de Rango */}
-        <button
-          type="button"
-          onClick={() => handleCardClick('out_of_range')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
-            statusFilter === 'out_of_range'
-              ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20 ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-slate-950'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-amber-300 dark:hover:border-amber-800/80 shadow-xs'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className={`text-xs font-semibold uppercase tracking-wider ${statusFilter === 'out_of_range' ? 'text-amber-100' : 'text-slate-400 dark:text-slate-500'}`}>
-                Fuera de Rango
-              </p>
-              <h3 className={`text-3xl font-extrabold mt-1.5 ${statusFilter === 'out_of_range' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`}>
-                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.outOfRangeCount}
-              </h3>
-            </div>
-            <div className={`p-2.5 rounded-xl ${statusFilter === 'out_of_range' ? 'bg-white/20 text-white' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400'}`}>
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-          </div>
-          <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'out_of_range' ? 'text-amber-100' : 'text-amber-600 dark:text-amber-400'}`}>
-            Oxígeno anómalo <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-          </p>
-        </button>
-
-        {/* Sin Transmitir */}
+        {/* Sin Transmitir (Rojos) */}
         <button
           type="button"
           onClick={() => handleCardClick('no_data')}
@@ -195,7 +139,35 @@ export default function DashboardPage() {
           </p>
         </button>
 
-        {/* Operativos */}
+        {/* Fuera de Rango (Amarillos) */}
+        <button
+          type="button"
+          onClick={() => handleCardClick('out_of_range')}
+          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
+            statusFilter === 'out_of_range'
+              ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20 ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-slate-950'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-amber-300 dark:hover:border-amber-800/80 shadow-xs'
+          }`}
+        >
+          <div className="flex justify-between items-start">
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-wider ${statusFilter === 'out_of_range' ? 'text-amber-100' : 'text-slate-400 dark:text-slate-500'}`}>
+                Fuera de Rango
+              </p>
+              <h3 className={`text-3xl font-extrabold mt-1.5 ${statusFilter === 'out_of_range' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`}>
+                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.outOfRangeCount}
+              </h3>
+            </div>
+            <div className={`p-2.5 rounded-xl ${statusFilter === 'out_of_range' ? 'bg-white/20 text-white' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400'}`}>
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          </div>
+          <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'out_of_range' ? 'text-amber-100' : 'text-amber-600 dark:text-amber-400'}`}>
+            Oxígeno anómalo <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+          </p>
+        </button>
+
+        {/* Operativos (Verdes) */}
         <button
           type="button"
           onClick={() => handleCardClick('ok')}
@@ -220,6 +192,34 @@ export default function DashboardPage() {
           </div>
           <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'ok' ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'}`}>
             Transmitiendo normal <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+          </p>
+        </button>
+
+        {/* Total Sensores (Azul) */}
+        <button
+          type="button"
+          onClick={() => handleCardClick('all')}
+          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
+            statusFilter === 'all'
+              ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-slate-950'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
+          }`}
+        >
+          <div className="flex justify-between items-start">
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-wider ${statusFilter === 'all' ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'}`}>
+                Total Sensores
+              </p>
+              <h3 className="text-3xl font-extrabold mt-1.5">
+                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.total}
+              </h3>
+            </div>
+            <div className={`p-2.5 rounded-xl ${statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+              <Radio className="w-5 h-5" />
+            </div>
+          </div>
+          <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'all' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
+            Ver todos los sensores <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
           </p>
         </button>
       </div>
@@ -263,10 +263,10 @@ export default function DashboardPage() {
               }}
               className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="all">Todos los estados</option>
-              <option value="out_of_range">Fuera de Rango</option>
               <option value="no_data">Sin Transmitir</option>
+              <option value="out_of_range">Fuera de Rango</option>
               <option value="ok">Operativos</option>
+              <option value="all">Todos los estados</option>
             </select>
           </div>
         </div>
