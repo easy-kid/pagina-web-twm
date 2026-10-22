@@ -51,7 +51,7 @@ export const sensorService = {
         ...sensor,
         id: sensor.id ?? sensor._id,
         name: sensor.sensor_name || sensor.name || `Sensor #${sensor.id}`,
-        type: sensor.medition ? `Oxígeno (${sensor.medition})` : sensor.type || 'Oxígeno Disuelto',
+        type: sensor.medition || sensor.type || 'Oxígeno Disuelto',
         status: sensor.status || 'ok',
         is_offline: sensor.status === 'no_data',
         is_out_of_range: sensor.status === 'out_of_range',
@@ -102,7 +102,7 @@ export const sensorService = {
       ...sensor,
       id: sensor.id ?? sensor._id,
       name: sensor.sensor_name || sensor.name || `Sensor #${sensor.id}`,
-      type: sensor.medition ? `Oxígeno (${sensor.medition})` : sensor.type || 'Oxígeno Disuelto',
+      type: sensor.medition || sensor.type || 'Oxígeno Disuelto',
       status: sensor.status || 'ok',
     }
   },
