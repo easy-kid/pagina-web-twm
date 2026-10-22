@@ -3,8 +3,8 @@ import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/Layout/MainLayout'
 import LoginPage from './pages/LoginPage'
-import DashboardView from './views/DashboardView'
-import SensorDetailView from './views/SensorDetailView'
+import DashboardPage from './pages/DashboardPage'
+import SensorDetailPage from './pages/SensorDetailPage'
 
 export default function App() {
   return (
@@ -23,10 +23,10 @@ export default function App() {
             }
           >
             {/* Dashboard de sensores y telemetría */}
-            <Route path="/" element={<DashboardView />} />
+            <Route path="/" element={<DashboardPage />} />
 
             {/* Gráfico histórico del sensor */}
-            <Route path="/sensors/:id" element={<SensorDetailView />} />
+            <Route path="/sensors/:id" element={<SensorDetailPage />} />
           </Route>
 
           {/* Redirección por defecto */}

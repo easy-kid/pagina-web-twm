@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Sun, Moon } from 'lucide-react'
+import { Sun, Moon } from '../Common/Icons'
 
 export default function ThemeToggle({ className = '', showLabel = false }) {
   const [isDark, setIsDark] = useState(() => {
