@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LogIn, Loader2, Lock, User, AlertCircle } from 'lucide-react'
+import { LogIn, Loader2, Lock, User, AlertCircle } from '../components/Common/Icons'
 import ThemeToggle from '../components/Theme/ThemeToggle'
 
 export default function LoginPage() {

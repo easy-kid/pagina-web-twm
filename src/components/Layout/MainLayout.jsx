@@ -6,7 +6,7 @@ import {
   LogOut,
   Menu,
   X,
-} from 'lucide-react'
+} from '../Common/Icons'
 import ThemeToggle from '../Theme/ThemeToggle'
 
 export default function MainLayout() {

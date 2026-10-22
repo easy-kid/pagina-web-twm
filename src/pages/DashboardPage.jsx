@@ -10,10 +10,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
-} from 'lucide-react'
+} from '../components/Common/Icons'
 import { sensorService } from '../services/sensorService'
 
-export default function DashboardView() {
+export default function DashboardPage() {
   const navigate = useNavigate()
 
   // Métricas del sistema calculadas combinando rutas
