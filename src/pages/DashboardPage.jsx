@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -14,6 +14,7 @@ import { sensorService, formatChileDateTime } from '../services/sensorService'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const cacheRef = useRef(new Map())
 
   // Métricas del sistema calculadas combinando rutas
   const [metrics, setMetrics] = useState({
@@ -42,10 +43,20 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Cargar lista de sensores con filtro de estado y paginación
+  // Cargar lista de sensores con filtro de estado, paginación y caché en memoria para respuesta instantánea
   const loadSensors = useCallback(async () => {
-    try {
+    const cacheKey = `${statusFilter}_${page}_${pageSize}`
+
+    if (cacheRef.current.has(cacheKey)) {
+      const cached = cacheRef.current.get(cacheKey)
+      setSensors(cached.items)
+      setTotalSensorsCount(cached.totalCount)
+      setLoadingSensors(false)
+    } else {
       setLoadingSensors(true)
+    }
+
+    try {
       const params = {
         page,
         page_size: pageSize,
@@ -55,6 +66,10 @@ export default function DashboardPage() {
       }
 
       const { items, meta } = await sensorService.getSensors(params)
+      cacheRef.current.set(cacheKey, {
+        items,
+        totalCount: meta.totalCount || 0,
+      })
       setSensors(items)
       setTotalSensorsCount(meta.totalCount || 0)
     } catch (err) {
@@ -110,7 +125,7 @@ export default function DashboardPage() {
         <button
           type="button"
           onClick={() => handleCardClick('no_data')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${statusFilter === 'no_data'
+          className={`text-left p-5 rounded-2xl border transition-colors duration-150 cursor-pointer relative overflow-hidden group ${statusFilter === 'no_data'
             ? 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20'
             : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
             }`}
@@ -137,7 +152,7 @@ export default function DashboardPage() {
         <button
           type="button"
           onClick={() => handleCardClick('out_of_range')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${statusFilter === 'out_of_range'
+          className={`text-left p-5 rounded-2xl border transition-colors duration-150 cursor-pointer relative overflow-hidden group ${statusFilter === 'out_of_range'
             ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20'
             : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
             }`}
@@ -164,7 +179,7 @@ export default function DashboardPage() {
         <button
           type="button"
           onClick={() => handleCardClick('ok')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${statusFilter === 'ok'
+          className={`text-left p-5 rounded-2xl border transition-colors duration-150 cursor-pointer relative overflow-hidden group ${statusFilter === 'ok'
             ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20'
             : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
             }`}
@@ -191,7 +206,7 @@ export default function DashboardPage() {
         <button
           type="button"
           onClick={() => handleCardClick('all')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${statusFilter === 'all'
+          className={`text-left p-5 rounded-2xl border transition-colors duration-150 cursor-pointer relative overflow-hidden group ${statusFilter === 'all'
             ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
             : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
             }`}
@@ -267,7 +282,7 @@ export default function DashboardPage() {
             <p className="text-sm font-medium">No se encontraron sensores para este criterio.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className={`overflow-x-auto transition-opacity duration-150 ${loadingSensors ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50/75 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
