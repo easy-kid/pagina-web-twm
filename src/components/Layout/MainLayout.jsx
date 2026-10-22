@@ -39,7 +39,7 @@ export default function MainLayout() {
       {/* Barra superior en móviles */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20">
         <div className="flex items-center gap-2">
-          <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">ULA Monitors</span>
+          <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">ULAtors</span>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -62,7 +62,7 @@ export default function MainLayout() {
         {/* Cabecera Sidebar (Desktop) */}
         <div className="hidden md:flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <h1 className="font-bold text-slate-900 dark:text-white text-lg leading-tight tracking-tight">ULA Monitors</h1>
+            <h1 className="font-bold text-slate-900 dark:text-white text-lg leading-tight tracking-tight">ULAtors</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">Sistema de Monitoreo</p>
           </div>
           <ThemeToggle />
