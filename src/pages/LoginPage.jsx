@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LogIn, Loader2, Lock, User, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { LogIn, Loader2, Lock, User, AlertCircle, Eye, EyeOff } from '../components/Common/Icons'
+import ThemeToggle from '../components/Theme/ThemeToggle'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -18,7 +19,6 @@ export default function LoginPage() {
       navigate('/', { replace: true })
     } else {
       // Garantizar que los campos estén en blanco al entrar a la vista de login
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUsername('')
       setPassword('')
       setShowPassword(false)
@@ -56,26 +56,31 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4 py-12 relative transition-colors">
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 px-4 py-12 relative transition-colors">
+      {/* Botón de tema en la esquina superior derecha */}
+      <div className="absolute top-5 right-5">
+        <ThemeToggle />
+      </div>
+
       <div className="max-w-md w-full">
         {/* Cabecera / Identidad */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">ULA Monitors</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">ULA Monitors</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Plataforma de Monitoreo de Centros de Cultivo
           </p>
         </div>
 
         {/* Tarjeta de Login */}
-        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-200/80 p-8 transition-colors">
-          <h2 className="text-xl font-semibold text-slate-800 mb-2">Iniciar Sesión</h2>
-          <p className="text-xs text-slate-500 mb-6">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl shadow-slate-200/60 dark:shadow-none border border-slate-200/80 dark:border-slate-800 p-8 transition-colors">
+          <h2 className="text-xl font-semibold text-slate-800 dark:text-white mb-2">Iniciar Sesión</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-6">
             Ingresa tus credenciales de operador para acceder al panel
           </p>
 
           {/* Alerta de Error */}
           {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-start gap-2.5">
+            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 text-sm flex items-start gap-2.5">
               <AlertCircle className="w-5 h-5 shrink-0 text-rose-500 mt-0.5" />
               <div className="flex-1 font-medium leading-snug">{error}</div>
             </div>
@@ -84,7 +89,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
             {/* Input Usuario */}
             <div>
-              <label htmlFor="username" className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+              <label htmlFor="username" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Usuario
               </label>
               <div className="relative">
@@ -101,14 +106,14 @@ export default function LoginPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="ej. operador1"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
 
             {/* Input Contraseña */}
             <div>
-              <label htmlFor="password" className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+              <label htmlFor="password" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Contraseña
               </label>
               <div className="relative">
@@ -125,12 +130,12 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
                   aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
                   tabIndex={-1}
                 >
