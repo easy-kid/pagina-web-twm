@@ -220,8 +220,7 @@ export default function DashboardPage() {
         {/* Cabecera de la Tabla y Filtros */}
         <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Radio className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
               {statusFilter === 'all' && 'Listado General de Sensores'}
               {statusFilter === 'out_of_range' && 'Sensores Fuera de Rango (Alerta)'}
               {statusFilter === 'no_data' && 'Sensores Sin Transmitir (Offline)'}
