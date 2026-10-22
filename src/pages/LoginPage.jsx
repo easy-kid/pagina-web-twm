@@ -51,7 +51,7 @@ export default function LoginPage() {
       <div className="max-w-md w-full">
         {/* Cabecera / Identidad */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">ULA Monitors</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">ULAtors</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Plataforma de Monitoreo de Centros de Cultivo
           </p>
@@ -60,9 +60,6 @@ export default function LoginPage() {
         {/* Tarjeta de Login */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl shadow-slate-200/60 dark:shadow-none border border-slate-200/80 dark:border-slate-800 p-8 transition-colors">
           <h2 className="text-xl font-semibold text-slate-800 dark:text-white mb-2">Iniciar Sesión</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-6">
-            Ingresa tus credenciales de operador para acceder al panel
-          </p>
 
           {/* Alerta de Error */}
           {error && (

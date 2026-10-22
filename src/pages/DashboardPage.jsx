@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   ArrowRight,
   Radio,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   Search,
@@ -23,7 +22,6 @@ export default function DashboardPage() {
     outOfRangeCount: 0,
     normalCount: 0,
   })
-  const [loadingMetrics, setLoadingMetrics] = useState(true)
 
   // Lista de sensores y filtro
   const [sensors, setSensors] = useState([])
@@ -37,13 +35,10 @@ export default function DashboardPage() {
   // Cargar métricas ejecutivas
   const loadMetrics = useCallback(async () => {
     try {
-      setLoadingMetrics(true)
       const data = await sensorService.getDashboardMetrics()
       setMetrics(data)
     } catch (err) {
       console.error('Error al cargar métricas:', err)
-    } finally {
-      setLoadingMetrics(false)
     }
   }, [])
 
@@ -126,7 +121,7 @@ export default function DashboardPage() {
                 Sin Transmitir
               </p>
               <h3 className={`text-3xl font-extrabold mt-1.5 ${statusFilter === 'no_data' ? 'text-white' : 'text-rose-600 dark:text-rose-400'}`}>
-                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.offlineCount}
+                {metrics.offlineCount}
               </h3>
             </div>
             <div className={`p-2.5 rounded-xl ${statusFilter === 'no_data' ? 'bg-white/20 text-white' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'}`}>
@@ -134,7 +129,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'no_data' ? 'text-rose-100' : 'text-rose-600 dark:text-rose-400'}`}>
-            Inactivos (&gt;90 min) <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            Inactivos (&gt;90 min)
           </p>
         </button>
 
@@ -153,7 +148,7 @@ export default function DashboardPage() {
                 Fuera de Rango
               </p>
               <h3 className={`text-3xl font-extrabold mt-1.5 ${statusFilter === 'out_of_range' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`}>
-                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.outOfRangeCount}
+                {metrics.outOfRangeCount}
               </h3>
             </div>
             <div className={`p-2.5 rounded-xl ${statusFilter === 'out_of_range' ? 'bg-white/20 text-white' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400'}`}>
@@ -161,7 +156,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'out_of_range' ? 'text-amber-100' : 'text-amber-600 dark:text-amber-400'}`}>
-            Oxígeno anómalo <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            Oxígeno anómalo
           </p>
         </button>
 
@@ -180,7 +175,7 @@ export default function DashboardPage() {
                 Operativos
               </p>
               <h3 className={`text-3xl font-extrabold mt-1.5 ${statusFilter === 'ok' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.normalCount}
+                {metrics.normalCount}
               </h3>
             </div>
             <div className={`p-2.5 rounded-xl ${statusFilter === 'ok' ? 'bg-white/20 text-white' : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'}`}>
@@ -188,7 +183,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'ok' ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'}`}>
-            Transmitiendo normal <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            Transmitiendo normal
           </p>
         </button>
 
@@ -207,7 +202,7 @@ export default function DashboardPage() {
                 Total Sensores
               </p>
               <h3 className="text-3xl font-extrabold mt-1.5">
-                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.total}
+                {metrics.total}
               </h3>
             </div>
             <div className={`p-2.5 rounded-xl ${statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
@@ -215,7 +210,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'all' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
-            Ver todos los sensores <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            Ver todos los sensores
           </p>
         </button>
       </div>
@@ -268,12 +263,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Tabla */}
-        {loadingSensors ? (
-          <div className="p-16 flex flex-col items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-2" />
-            <p className="text-xs text-slate-500 dark:text-slate-400">Cargando sensores...</p>
-          </div>
-        ) : displayedSensors.length === 0 ? (
+        {displayedSensors.length === 0 && !loadingSensors ? (
           <div className="p-12 text-center text-slate-500 dark:text-slate-400">
             <p className="text-sm font-medium">No se encontraron sensores para este criterio.</p>
           </div>

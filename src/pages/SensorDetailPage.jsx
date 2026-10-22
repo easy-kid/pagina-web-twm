@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   WifiOff,
   CheckCircle2,
-  Loader2,
   Building,
   RefreshCw,
 } from '../components/Common/Icons'
@@ -19,7 +18,6 @@ export default function SensorDetailPage() {
   const navigate = useNavigate()
   const [sensor, setSensor] = useState(null)
   const [measurements, setMeasurements] = useState([])
-  const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
   const loadSensorData = useCallback(async () => {
@@ -33,28 +31,17 @@ export default function SensorDetailPage() {
     } catch (error) {
       console.error('Error al cargar detalle del sensor:', error)
     } finally {
-      setLoading(false)
       setRefreshing(false)
     }
   }, [id])
 
   useEffect(() => {
-    setLoading(true)
     loadSensorData()
   }, [loadSensorData])
 
   const handleRefresh = () => {
     setRefreshing(true)
     loadSensorData()
-  }
-
-  if (loading) {
-    return (
-      <div className="p-16 flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Cargando telemetría del sensor...</p>
-      </div>
-    )
   }
 
   const isOutOfRange = sensor?.status === 'out_of_range'
