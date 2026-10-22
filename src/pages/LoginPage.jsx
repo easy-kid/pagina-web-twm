@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LogIn, Loader2, Lock, User, AlertCircle } from 'lucide-react'
+import { LogIn, Loader2, Lock, User, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -15,6 +16,12 @@ export default function LoginPage() {
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/', { replace: true })
+    } else {
+      // Garantizar que los campos estén en blanco al entrar a la vista de login
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setUsername('')
+      setPassword('')
+      setShowPassword(false)
     }
   }, [isAuthenticated, navigate])
 
@@ -23,11 +30,19 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
+    const submittedPassword = password
+    // Limpieza inmediata del estado sensible en memoria
+    setPassword('')
+
     try {
-      await login(username, password)
+      await login(username, submittedPassword)
+      setUsername('')
+      setShowPassword(false)
       navigate('/', { replace: true })
     } catch (err) {
       console.error('Error de autenticación:', err)
+      // Aseguramos que la contraseña permanezca en blanco ante error
+      setPassword('')
       if (err.response?.status === 401 || err.response?.status === 422) {
         setError('Credenciales inválidas. Por favor verifique su usuario y contraseña.')
       } else if (err.message === 'Network Error' || !err.response) {
@@ -66,7 +81,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
             {/* Input Usuario */}
             <div>
               <label htmlFor="username" className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -81,7 +96,7 @@ export default function LoginPage() {
                   name="username"
                   type="text"
                   required
-                  autoComplete="username"
+                  autoComplete="off"
                   disabled={loading}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -103,15 +118,24 @@ export default function LoginPage() {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   disabled={loading}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
