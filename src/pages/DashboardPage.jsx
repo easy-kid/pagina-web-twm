@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   ArrowRight,
   Radio,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   Search,
@@ -15,6 +14,7 @@ import { sensorService, formatChileDateTime } from '../services/sensorService'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const cacheRef = useRef(new Map())
 
   // Métricas del sistema calculadas combinando rutas
   const [metrics, setMetrics] = useState({
@@ -23,7 +23,6 @@ export default function DashboardPage() {
     outOfRangeCount: 0,
     normalCount: 0,
   })
-  const [loadingMetrics, setLoadingMetrics] = useState(true)
 
   // Lista de sensores y filtro
   const [sensors, setSensors] = useState([])
@@ -37,20 +36,27 @@ export default function DashboardPage() {
   // Cargar métricas ejecutivas
   const loadMetrics = useCallback(async () => {
     try {
-      setLoadingMetrics(true)
       const data = await sensorService.getDashboardMetrics()
       setMetrics(data)
     } catch (err) {
       console.error('Error al cargar métricas:', err)
-    } finally {
-      setLoadingMetrics(false)
     }
   }, [])
 
-  // Cargar lista de sensores con filtro de estado y paginación
+  // Cargar lista de sensores con filtro de estado, paginación y caché en memoria para respuesta instantánea
   const loadSensors = useCallback(async () => {
-    try {
+    const cacheKey = `${statusFilter}_${page}_${pageSize}`
+
+    if (cacheRef.current.has(cacheKey)) {
+      const cached = cacheRef.current.get(cacheKey)
+      setSensors(cached.items)
+      setTotalSensorsCount(cached.totalCount)
+      setLoadingSensors(false)
+    } else {
       setLoadingSensors(true)
+    }
+
+    try {
       const params = {
         page,
         page_size: pageSize,
@@ -60,6 +66,10 @@ export default function DashboardPage() {
       }
 
       const { items, meta } = await sensorService.getSensors(params)
+      cacheRef.current.set(cacheKey, {
+        items,
+        totalCount: meta.totalCount || 0,
+      })
       setSensors(items)
       setTotalSensorsCount(meta.totalCount || 0)
     } catch (err) {
@@ -104,124 +114,88 @@ export default function DashboardPage() {
             Panel de Control Operacional
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Supervisión en tiempo real de sensores de oxígeno disuelto en centros de cultivo
+            Supervisión en tiempo real de los sensores de oxígeno disuelto en centros de cultivo
           </p>
         </div>
       </div>
 
-      {/* Tarjetas de Resumen (Clicables para navegar a los listados correspondientes) */}
+      {/* Tarjetas de Resumen */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-        {/* Sin Transmitir (Rojos) */}
-        <button
-          type="button"
-          onClick={() => handleCardClick('no_data')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
-            statusFilter === 'no_data'
-              ? 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20 ring-2 ring-rose-600 ring-offset-2 dark:ring-offset-slate-950'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-rose-300 dark:hover:border-rose-800/80 shadow-xs'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className={`text-xs font-semibold uppercase tracking-wider ${statusFilter === 'no_data' ? 'text-rose-100' : 'text-slate-400 dark:text-slate-500'}`}>
-                Sin Transmitir
-              </p>
-              <h3 className={`text-3xl font-extrabold mt-1.5 ${statusFilter === 'no_data' ? 'text-white' : 'text-rose-600 dark:text-rose-400'}`}>
-                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.offlineCount}
-              </h3>
-            </div>
-            <div className={`p-2.5 rounded-xl ${statusFilter === 'no_data' ? 'bg-white/20 text-white' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'}`}>
-              <WifiOff className="w-5 h-5" />
-            </div>
-          </div>
-          <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'no_data' ? 'text-rose-100' : 'text-rose-600 dark:text-rose-400'}`}>
-            Inactivos (&gt;90 min) <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-          </p>
-        </button>
+        {[
+          {
+            id: 'no_data',
+            label: 'Sin Transmitir',
+            count: metrics.offlineCount,
+            icon: WifiOff,
+            subtext: 'Inactivos (>90 min)',
+            activeClass: 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20',
+            textColor: 'text-rose-600 dark:text-rose-400',
+            iconBox: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400',
+          },
+          {
+            id: 'out_of_range',
+            label: 'Fuera de Rango',
+            count: metrics.outOfRangeCount,
+            icon: AlertTriangle,
+            subtext: 'Oxígeno anómalo',
+            activeClass: 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20',
+            textColor: 'text-amber-600 dark:text-amber-400',
+            iconBox: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
+          },
+          {
+            id: 'ok',
+            label: 'Operativos',
+            count: metrics.normalCount,
+            icon: CheckCircle2,
+            subtext: 'Transmitiendo normal',
+            activeClass: 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20',
+            textColor: 'text-emerald-600 dark:text-emerald-400',
+            iconBox: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
+          },
+          {
+            id: 'all',
+            label: 'Total Sensores',
+            count: metrics.total,
+            icon: Radio,
+            subtext: 'Ver todos los sensores',
+            activeClass: 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20',
+            textColor: 'text-slate-900 dark:text-white',
+            iconBox: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
+          },
+        ].map((card) => {
+          const isSelected = statusFilter === card.id
+          const Icon = card.icon
 
-        {/* Fuera de Rango (Amarillos) */}
-        <button
-          type="button"
-          onClick={() => handleCardClick('out_of_range')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
-            statusFilter === 'out_of_range'
-              ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20 ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-slate-950'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-amber-300 dark:hover:border-amber-800/80 shadow-xs'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className={`text-xs font-semibold uppercase tracking-wider ${statusFilter === 'out_of_range' ? 'text-amber-100' : 'text-slate-400 dark:text-slate-500'}`}>
-                Fuera de Rango
+          return (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => handleCardClick(card.id)}
+              className={`text-left p-5 rounded-2xl border transition-colors duration-150 cursor-pointer relative overflow-hidden group ${
+                isSelected
+                  ? card.activeClass
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-wider ${isSelected ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'}`}>
+                    {card.label}
+                  </p>
+                  <h3 className={`text-3xl font-extrabold mt-1.5 ${isSelected ? 'text-white' : card.textColor}`}>
+                    {card.count}
+                  </h3>
+                </div>
+                <div className={`p-2.5 rounded-xl ${isSelected ? 'bg-white/20 text-white' : card.iconBox}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+              </div>
+              <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${isSelected ? 'text-white/90' : card.textColor}`}>
+                {card.subtext}
               </p>
-              <h3 className={`text-3xl font-extrabold mt-1.5 ${statusFilter === 'out_of_range' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`}>
-                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.outOfRangeCount}
-              </h3>
-            </div>
-            <div className={`p-2.5 rounded-xl ${statusFilter === 'out_of_range' ? 'bg-white/20 text-white' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400'}`}>
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-          </div>
-          <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'out_of_range' ? 'text-amber-100' : 'text-amber-600 dark:text-amber-400'}`}>
-            Oxígeno anómalo <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-          </p>
-        </button>
-
-        {/* Operativos (Verdes) */}
-        <button
-          type="button"
-          onClick={() => handleCardClick('ok')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
-            statusFilter === 'ok'
-              ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20 ring-2 ring-emerald-600 ring-offset-2 dark:ring-offset-slate-950'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-emerald-300 dark:hover:border-emerald-800/80 shadow-xs'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className={`text-xs font-semibold uppercase tracking-wider ${statusFilter === 'ok' ? 'text-emerald-100' : 'text-slate-400 dark:text-slate-500'}`}>
-                Operativos
-              </p>
-              <h3 className={`text-3xl font-extrabold mt-1.5 ${statusFilter === 'ok' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.normalCount}
-              </h3>
-            </div>
-            <div className={`p-2.5 rounded-xl ${statusFilter === 'ok' ? 'bg-white/20 text-white' : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'}`}>
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-          </div>
-          <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'ok' ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'}`}>
-            Transmitiendo normal <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-          </p>
-        </button>
-
-        {/* Total Sensores (Azul) */}
-        <button
-          type="button"
-          onClick={() => handleCardClick('all')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
-            statusFilter === 'all'
-              ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-slate-950'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className={`text-xs font-semibold uppercase tracking-wider ${statusFilter === 'all' ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'}`}>
-                Total Sensores
-              </p>
-              <h3 className="text-3xl font-extrabold mt-1.5">
-                {loadingMetrics ? <Loader2 className="w-6 h-6 animate-spin mt-1" /> : metrics.total}
-              </h3>
-            </div>
-            <div className={`p-2.5 rounded-xl ${statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
-              <Radio className="w-5 h-5" />
-            </div>
-          </div>
-          <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${statusFilter === 'all' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
-            Ver todos los sensores <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-          </p>
-        </button>
+            </button>
+          )
+        })}
       </div>
 
       {/* Tabla Interactiva de Sensores */}
@@ -229,8 +203,7 @@ export default function DashboardPage() {
         {/* Cabecera de la Tabla y Filtros */}
         <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Radio className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
               {statusFilter === 'all' && 'Listado General de Sensores'}
               {statusFilter === 'out_of_range' && 'Sensores Fuera de Rango (Alerta)'}
               {statusFilter === 'no_data' && 'Sensores Sin Transmitir (Offline)'}
@@ -272,17 +245,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Tabla */}
-        {loadingSensors ? (
-          <div className="p-16 flex flex-col items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-2" />
-            <p className="text-xs text-slate-500 dark:text-slate-400">Cargando sensores...</p>
-          </div>
-        ) : displayedSensors.length === 0 ? (
+        {displayedSensors.length === 0 && !loadingSensors ? (
           <div className="p-12 text-center text-slate-500 dark:text-slate-400">
             <p className="text-sm font-medium">No se encontraron sensores para este criterio.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className={`overflow-x-auto transition-opacity duration-150 ${loadingSensors ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50/75 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
