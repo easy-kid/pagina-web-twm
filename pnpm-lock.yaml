@@ -11,18 +11,21 @@ importers:
       '@tremor/react':
         specifier: ^3.18.7
         version: 3.18.7(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      apexcharts:
+        specifier: ^8.4.0
+        version: 8.4.0
       react:
         specifier: ^19.2.8
         version: 19.3.1
+      react-apexcharts:
+        specifier: ^2.1.1
+        version: 2.1.1(apexcharts@8.4.0)(react@19.3.1)
       react-dom:
         specifier: ^19.2.8
         version: 19.3.1(react@19.3.1)
       react-router-dom:
         specifier: ^7.18.4
         version: 7.18.4(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      react-sparklines:
-        specifier: ^1.7.0
-        version: 1.7.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -574,6 +577,13 @@ packages:
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
 
+  apex-commons@0.8.3:
+    resolution: {integrity: sha512-WdU5lblyL1ByI/nkFOJkSgJYenCsHmay0P3UIcnSeUiCyF1b30SvPSZLbyxOCUOry8IlL7M0/3GvsGbZTMm8FA==}
+
+  apexcharts@8.4.0:
+    resolution: {integrity: sha512-pPMkTOZG32qv1Dw3BwehojFoyq1ejUFOHZd6ufINvolUCBOU1tG5RTQ5j0KYv/+o14bytrcLEjkjYPfKu/PCJA==}
+    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
+
   aria-hidden@1.2.6:
     resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}
     engines: {node: '>=10'}
@@ -1118,6 +1128,12 @@ packages:
     resolution: {integrity: sha512-+Owyggi9IxT1ePKGafcI87ubSmxol6smwJ+RAHDQlx9+9cPwFWDiKFFCPuWhr9ignlGpZ9vDQLw67N4dcTVFEA==}
     engines: {node: '>=20'}
 
+  react-apexcharts@2.1.1:
+    resolution: {integrity: sha512-aV25n+1ZdAzRG0KhODVC48K8WbhMKBAr3yWSeaaBqM1ySn22kSSKblsNCUvlwegsT+cdMLuOrK9xGZb+IK+OkQ==}
+    peerDependencies:
+      apexcharts: '>=5.10.1'
+      react: '>=16.8.0'
+
   react-aria@3.53.1:
     resolution: {integrity: sha512-dikisyOjJd3D2fFrIDWmVWzqiLz5B86GzZv1zxs7xI4dVc0JIz/1Wa52I20gYvVL2WXeFXlygYsle/QcOMhtcg==}
     peerDependencies:
@@ -1163,12 +1179,6 @@ packages:
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-
-  react-sparklines@1.7.0:
-    resolution: {integrity: sha512-bJFt9K4c5Z0k44G8KtxIhbG+iyxrKjBZhdW6afP+R7EnIq+iKjbWbEFISrf3WKNFsda+C46XAfnX0StS5fbDcg==}
-    peerDependencies:
-      react: '*'
-      react-dom: '*'
 
   react-stately@3.51.0:
     resolution: {integrity: sha512-YJcmkAXu2XOQP97hO/qz/cC3qv9kni3oVhwBlxWr358BHePJUpY15XwL3YSRMKxYt4EkslPqAz11JRirMfANGw==}
@@ -1810,6 +1820,12 @@ snapshots:
       json-schema-traverse: 0.4.1
       uri-js: 4.4.1
 
+  apex-commons@0.8.3: {}
+
+  apexcharts@8.4.0:
+    dependencies:
+      apex-commons: 0.8.3
+
   aria-hidden@1.2.6:
     dependencies:
       tslib: 2.8.1
@@ -2269,6 +2285,12 @@ snapshots:
     dependencies:
       hookified: 2.2.0
 
+  react-apexcharts@2.1.1(apexcharts@8.4.0)(react@19.3.1):
+    dependencies:
+      apexcharts: 8.4.0
+      prop-types: 15.8.1
+      react: 19.3.1
+
   react-aria@3.53.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@internationalized/date': 3.12.4
@@ -2318,12 +2340,6 @@ snapshots:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
       react-transition-group: 4.4.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-
-  react-sparklines@1.7.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
-    dependencies:
-      prop-types: 15.8.1
-      react: 19.3.1
-      react-dom: 19.3.1(react@19.3.1)
 
   react-stately@3.51.0(react@19.3.1):
     dependencies:

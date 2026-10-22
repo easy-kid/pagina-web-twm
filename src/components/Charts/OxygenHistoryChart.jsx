@@ -1,17 +1,29 @@
-import { useState } from 'react'
-import {
-  Sparklines,
-  SparklinesLine,
-  SparklinesSpots,
-  SparklinesReferenceLine,
-} from 'react-sparklines'
+import { useState, useEffect } from 'react'
+import Chart from 'react-apexcharts'
 
 export default function OxygenHistoryChart({
   data = [],
   oxygenMin = null,
   oxygenMax = null,
 }) {
-  const [hoveredData, setHoveredData] = useState(null)
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document !== 'undefined') {
+      return document.documentElement.classList.contains('dark')
+    }
+    return false
+  })
+
+  // Sincroniza el tema del gráfico con el modo oscuro de la aplicación
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'))
+    })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+    return () => observer.disconnect()
+  }, [])
 
   if (!data || data.length === 0) {
     return (
@@ -21,150 +33,173 @@ export default function OxygenHistoryChart({
     )
   }
 
-  // Obtenemos los valores numéricos
-  const values = data.map((d) => d.value)
-  const latestValue = values[values.length - 1]
-  const minValue = Math.min(...values)
-  const maxValue = Math.max(...values)
-  const avgValue = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1)
+  // Serie de mediciones
+  const series = [
+    {
+      name: 'Oxígeno Disuelto',
+      data: data.map((d) => d.value),
+    },
+  ]
 
-  // Primer y último timestamp para el eje de tiempo
-  const firstTimestamp = data[0]?.timestamp || ''
-  const lastTimestamp = data[data.length - 1]?.timestamp || ''
+  // Líneas de umbral operacional exactas en el eje Y
+  const yaxisAnnotations = []
+  if (oxygenMin != null) {
+    yaxisAnnotations.push({
+      y: oxygenMin,
+      borderColor: '#f59e0b',
+      borderWidth: 1.5,
+      strokeDashArray: 4,
+      label: {
+        borderColor: '#f59e0b',
+        style: {
+          color: '#ffffff',
+          background: '#d97706',
+          fontSize: '10px',
+          fontWeight: 'bold',
+          padding: { left: 6, right: 6, top: 2, bottom: 2 },
+        },
+        text: `Mínimo: ${oxygenMin} mg/L`,
+        position: 'right',
+      },
+    })
+  }
 
-  // Escala vertical que incluya los límites operacionales si están definidos
-  const scaleMin = Math.max(0, Math.min(minValue, oxygenMin ?? minValue) - 0.5)
-  const scaleMax = Math.max(maxValue, oxygenMax ?? maxValue) + 0.5
+  if (oxygenMax != null) {
+    yaxisAnnotations.push({
+      y: oxygenMax,
+      borderColor: '#f59e0b',
+      borderWidth: 1.5,
+      strokeDashArray: 4,
+      label: {
+        borderColor: '#f59e0b',
+        style: {
+          color: '#ffffff',
+          background: '#d97706',
+          fontSize: '10px',
+          fontWeight: 'bold',
+          padding: { left: 6, right: 6, top: 2, bottom: 2 },
+        },
+        text: `Máximo: ${oxygenMax} mg/L`,
+        position: 'right',
+      },
+    })
+  }
+
+  // Opciones de configuración de ApexCharts
+  const options = {
+    chart: {
+      type: 'area',
+      height: 290,
+      fontFamily: 'inherit',
+      background: 'transparent',
+      toolbar: {
+        show: false,
+      },
+      zoom: {
+        enabled: false,
+      },
+      animations: {
+        enabled: true,
+        easing: 'easeinout',
+        speed: 600,
+      },
+    },
+    theme: {
+      mode: isDark ? 'dark' : 'light',
+    },
+    colors: ['#2563eb'],
+    stroke: {
+      curve: 'smooth',
+      width: 2.5,
+      colors: ['#2563eb'],
+    },
+    fill: {
+      type: 'gradient',
+      gradient: {
+        shadeIntensity: 1,
+        opacityFrom: isDark ? 0.45 : 0.4,
+        opacityTo: 0.05,
+        stops: [0, 95, 100],
+      },
+    },
+    dataLabels: {
+      enabled: false,
+    },
+    grid: {
+      borderColor: isDark ? '#1e293b' : '#e2e8f0',
+      strokeDashArray: 3,
+      xaxis: {
+        lines: { show: false },
+      },
+      yaxis: {
+        lines: { show: true },
+      },
+      padding: {
+        top: 10,
+        right: 20,
+        bottom: 0,
+        left: 15,
+      },
+    },
+    xaxis: {
+      categories: data.map((d) => d.timestamp),
+      tickAmount: 8,
+      labels: {
+        rotate: 0,
+        style: {
+          colors: isDark ? '#94a3b8' : '#64748b',
+          fontSize: '11px',
+        },
+        hideOverlappingLabels: true,
+      },
+      axisBorder: {
+        show: true,
+        color: isDark ? '#334155' : '#cbd5e1',
+      },
+      axisTicks: {
+        show: false,
+      },
+    },
+    yaxis: {
+      labels: {
+        formatter: (val) => `${val.toFixed(1)} mg/L`,
+        style: {
+          colors: isDark ? '#94a3b8' : '#64748b',
+          fontSize: '11px',
+        },
+      },
+    },
+    tooltip: {
+      theme: isDark ? 'dark' : 'light',
+      y: {
+        formatter: (val) => `${val} mg/L`,
+      },
+      x: {
+        show: true,
+      },
+    },
+    annotations: {
+      yaxis: yaxisAnnotations,
+    },
+  }
 
   return (
     <div className="w-full">
-      {/* Tarjetas KPI de resumen rápido */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl p-2.5">
-          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Lectura Actual</p>
-          <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-            {hoveredData?.value ?? latestValue} <span className="text-xs font-normal text-slate-400">mg/L</span>
-          </p>
-        </div>
-        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl p-2.5">
-          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Promedio (60 m)</p>
-          <p className="text-lg font-bold text-slate-700 dark:text-slate-200">
-            {avgValue} <span className="text-xs font-normal text-slate-400">mg/L</span>
-          </p>
-        </div>
-        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl p-2.5">
-          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Mínimo Registrado</p>
-          <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-            {minValue} <span className="text-xs font-normal text-slate-400">mg/L</span>
-          </p>
-        </div>
-        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl p-2.5">
-          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Máximo Registrado</p>
-          <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-            {maxValue} <span className="text-xs font-normal text-slate-400">mg/L</span>
-          </p>
-        </div>
+      <div className="w-full h-[290px]">
+        <Chart options={options} series={series} type="area" height="100%" />
       </div>
 
-      {/* Contenedor del Gráfico Sparkline */}
-      <div className="relative bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 overflow-hidden">
-        {/* Guías de valores en los extremos */}
-        <div className="flex justify-between items-center text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-2 px-1">
-          <span>Máx escala: {scaleMax.toFixed(1)} mg/L</span>
-          {oxygenMin != null && (
-            <span className="text-amber-500 font-medium">Límite mínimo: {oxygenMin} mg/L</span>
-          )}
-          <span>Mín escala: {scaleMin.toFixed(1)} mg/L</span>
-        </div>
-
-        <div className="w-full h-44">
-          <Sparklines
-            data={values}
-            width={800}
-            height={180}
-            margin={10}
-            min={scaleMin}
-            max={scaleMax}
-            onMouseMove={(action, val) => {
-              if (action === 'enter') setHoveredData({ value: val })
-            }}
-          >
-            {/* Curva principal con estilo vectorial fijo */}
-            <SparklinesLine
-              color="#2563eb"
-              style={{
-                stroke: '#2563eb',
-                strokeWidth: 2.5,
-                fill: '#3b82f6',
-                fillOpacity: 0.15,
-                strokeLinejoin: 'round',
-                strokeLinecap: 'round',
-                vectorEffect: 'non-scaling-stroke',
-              }}
-            />
-
-            {/* Puntos de datos */}
-            <SparklinesSpots
-              size={3}
-              style={{
-                stroke: '#2563eb',
-                fill: '#ffffff',
-                strokeWidth: 1.5,
-                vectorEffect: 'non-scaling-stroke',
-              }}
-            />
-
-            {/* Línea de umbral mínimo operacional */}
-            {oxygenMin != null && (
-              <SparklinesReferenceLine
-                type="custom"
-                value={oxygenMin}
-                style={{
-                  stroke: '#f59e0b',
-                  strokeWidth: 1.5,
-                  strokeDasharray: '4 4',
-                  vectorEffect: 'non-scaling-stroke',
-                }}
-              />
-            )}
-
-            {/* Línea de umbral máximo operacional */}
-            {oxygenMax != null && (
-              <SparklinesReferenceLine
-                type="custom"
-                value={oxygenMax}
-                style={{
-                  stroke: '#f59e0b',
-                  strokeWidth: 1.5,
-                  strokeDasharray: '4 4',
-                  vectorEffect: 'non-scaling-stroke',
-                }}
-              />
-            )}
-          </Sparklines>
-        </div>
-
-        {/* Eje horizontal de fechas */}
-        <div className="flex items-center justify-between text-[11px] font-medium text-slate-400 dark:text-slate-500 pt-3 border-t border-slate-200/60 dark:border-slate-800/60 mt-2">
-          <span>Inicio: {firstTimestamp}</span>
-          <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold">
-            {values.length} muestras en hora de Chile
-          </span>
-          <span>Último: {lastTimestamp}</span>
-        </div>
-      </div>
-
-      {/* Leyenda inferior */}
-      <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-3 px-1 gap-2">
+      {/* Leyenda y rangos operacionales */}
+      <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-2 px-2 gap-2">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
-            <span className="w-3 h-1 bg-blue-600 rounded-full inline-block"></span>
-            Oxígeno Disuelto (react-sparklines)
+            <span className="w-3 h-1.5 bg-blue-600 rounded-full inline-block"></span>
+            Nivel de Oxígeno Disuelto (mg/L)
           </span>
           {(oxygenMin != null || oxygenMax != null) && (
             <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
               <span className="w-3 h-0.5 border-t border-dashed border-amber-500 inline-block"></span>
-              Límites Operacionales: {oxygenMin != null ? `Mín ${oxygenMin} mg/L` : ''} {oxygenMax != null ? `- Máx ${oxygenMax} mg/L` : ''}
+              Rango Operacional: {oxygenMin != null ? `Mín ${oxygenMin} mg/L` : ''} {oxygenMax != null ? `- Máx ${oxygenMax} mg/L` : ''}
             </span>
           )}
         </div>

@@ -11,10 +11,11 @@
   },
   "dependencies": {
     "@tremor/react": "^3.18.7",
+    "apexcharts": "^8.4.0",
     "react": "^19.2.8",
+    "react-apexcharts": "^2.1.1",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.4",
-    "react-sparklines": "^1.7.0"
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
