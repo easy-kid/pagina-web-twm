@@ -1,37 +1,18 @@
+import { useState } from 'react'
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-} from 'recharts'
-
-// Tooltip flotante enriquecido con soporte de modo claro y oscuro
-function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload || !payload.length) return null
-
-  const value = payload[0].value
-
-  return (
-    <div className="bg-slate-900/95 dark:bg-slate-800/95 border border-slate-700/80 rounded-xl p-3 shadow-2xl backdrop-blur-md text-white">
-      <p className="text-xs text-slate-400 mb-1 font-medium">{label}</p>
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-xl font-bold text-blue-400">{value}</span>
-        <span className="text-xs text-slate-400 font-medium">mg/L</span>
-      </div>
-      <p className="text-[10px] text-slate-500 mt-1">Oxígeno Disuelto</p>
-    </div>
-  )
-}
+  Sparklines,
+  SparklinesLine,
+  SparklinesSpots,
+  SparklinesReferenceLine,
+} from 'react-sparklines'
 
 export default function OxygenHistoryChart({
   data = [],
   oxygenMin = null,
   oxygenMax = null,
 }) {
+  const [hoveredData, setHoveredData] = useState(null)
+
   if (!data || data.length === 0) {
     return (
       <div className="text-center py-16 text-slate-400 dark:text-slate-500 text-sm font-medium">
@@ -40,114 +21,150 @@ export default function OxygenHistoryChart({
     )
   }
 
+  // Obtenemos los valores numéricos
+  const values = data.map((d) => d.value)
+  const latestValue = values[values.length - 1]
+  const minValue = Math.min(...values)
+  const maxValue = Math.max(...values)
+  const avgValue = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1)
+
+  // Primer y último timestamp para el eje de tiempo
+  const firstTimestamp = data[0]?.timestamp || ''
+  const lastTimestamp = data[data.length - 1]?.timestamp || ''
+
+  // Escala vertical que incluya los límites operacionales si están definidos
+  const scaleMin = Math.max(0, Math.min(minValue, oxygenMin ?? minValue) - 0.5)
+  const scaleMax = Math.max(maxValue, oxygenMax ?? maxValue) + 0.5
+
   return (
     <div className="w-full">
-      <div className="w-full h-72">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={data}
-            margin={{ top: 15, right: 25, left: 10, bottom: 5 }}
-          >
-            <defs>
-              <linearGradient id="oxygenAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
-              </linearGradient>
-            </defs>
-
-            {/* Cuadrícula suave */}
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              className="stroke-slate-200 dark:stroke-slate-800"
-              opacity={0.5}
-            />
-
-            {/* Eje X (marcas temporales bien espaciadas) */}
-            <XAxis
-              dataKey="timestamp"
-              tickLine={false}
-              axisLine={{ stroke: '#475569', opacity: 0.2 }}
-              tick={{ fontSize: 11 }}
-              className="text-slate-500 dark:text-slate-400 fill-current"
-              minTickGap={35}
-            />
-
-            {/* Eje Y con espacio suficiente para evitar cortes de texto */}
-            <YAxis
-              tickLine={false}
-              axisLine={{ stroke: '#475569', opacity: 0.2 }}
-              tick={{ fontSize: 11 }}
-              className="text-slate-500 dark:text-slate-400 fill-current"
-              tickFormatter={(v) => `${v} mg/L`}
-              width={75}
-              domain={['auto', 'auto']}
-            />
-
-            {/* Tooltip interactivo */}
-            <Tooltip content={<CustomTooltip />} />
-
-            {/* Líneas de umbral operacional opcionales */}
-            {oxygenMin != null && (
-              <ReferenceLine
-                y={oxygenMin}
-                stroke="#f59e0b"
-                strokeDasharray="4 4"
-                label={{
-                  value: `Mín ${oxygenMin} mg/L`,
-                  fill: '#d97706',
-                  fontSize: 10,
-                  position: 'insideTopRight',
-                  fontWeight: 600,
-                }}
-              />
-            )}
-            {oxygenMax != null && (
-              <ReferenceLine
-                y={oxygenMax}
-                stroke="#f59e0b"
-                strokeDasharray="4 4"
-                label={{
-                  value: `Máx ${oxygenMax} mg/L`,
-                  fill: '#d97706',
-                  fontSize: 10,
-                  position: 'insideBottomRight',
-                  fontWeight: 600,
-                }}
-              />
-            )}
-
-            {/* Curva de oxígeno con relleno azul degradado */}
-            <Area
-              type="monotone"
-              dataKey="value"
-              name="Oxígeno Disuelto"
-              stroke="#2563eb"
-              strokeWidth={2.5}
-              fillOpacity={1}
-              fill="url(#oxygenAreaGradient)"
-              activeDot={{
-                r: 6,
-                fill: '#2563eb',
-                stroke: '#ffffff',
-                strokeWidth: 2,
-              }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+      {/* Tarjetas KPI de resumen rápido */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl p-2.5">
+          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Lectura Actual</p>
+          <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+            {hoveredData?.value ?? latestValue} <span className="text-xs font-normal text-slate-400">mg/L</span>
+          </p>
+        </div>
+        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl p-2.5">
+          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Promedio (60 m)</p>
+          <p className="text-lg font-bold text-slate-700 dark:text-slate-200">
+            {avgValue} <span className="text-xs font-normal text-slate-400">mg/L</span>
+          </p>
+        </div>
+        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl p-2.5">
+          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Mínimo Registrado</p>
+          <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+            {minValue} <span className="text-xs font-normal text-slate-400">mg/L</span>
+          </p>
+        </div>
+        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl p-2.5">
+          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Máximo Registrado</p>
+          <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+            {maxValue} <span className="text-xs font-normal text-slate-400">mg/L</span>
+          </p>
+        </div>
       </div>
 
-      {/* Leyenda y rangos operacionales */}
-      <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-3 px-2 gap-2">
+      {/* Contenedor del Gráfico Sparkline */}
+      <div className="relative bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 overflow-hidden">
+        {/* Guías de valores en los extremos */}
+        <div className="flex justify-between items-center text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-2 px-1">
+          <span>Máx escala: {scaleMax.toFixed(1)} mg/L</span>
+          {oxygenMin != null && (
+            <span className="text-amber-500 font-medium">Límite mínimo: {oxygenMin} mg/L</span>
+          )}
+          <span>Mín escala: {scaleMin.toFixed(1)} mg/L</span>
+        </div>
+
+        <div className="w-full h-44">
+          <Sparklines
+            data={values}
+            width={800}
+            height={180}
+            margin={10}
+            min={scaleMin}
+            max={scaleMax}
+            onMouseMove={(action, val) => {
+              if (action === 'enter') setHoveredData({ value: val })
+            }}
+          >
+            {/* Curva principal con estilo vectorial fijo */}
+            <SparklinesLine
+              color="#2563eb"
+              style={{
+                stroke: '#2563eb',
+                strokeWidth: 2.5,
+                fill: '#3b82f6',
+                fillOpacity: 0.15,
+                strokeLinejoin: 'round',
+                strokeLinecap: 'round',
+                vectorEffect: 'non-scaling-stroke',
+              }}
+            />
+
+            {/* Puntos de datos */}
+            <SparklinesSpots
+              size={3}
+              style={{
+                stroke: '#2563eb',
+                fill: '#ffffff',
+                strokeWidth: 1.5,
+                vectorEffect: 'non-scaling-stroke',
+              }}
+            />
+
+            {/* Línea de umbral mínimo operacional */}
+            {oxygenMin != null && (
+              <SparklinesReferenceLine
+                type="custom"
+                value={oxygenMin}
+                style={{
+                  stroke: '#f59e0b',
+                  strokeWidth: 1.5,
+                  strokeDasharray: '4 4',
+                  vectorEffect: 'non-scaling-stroke',
+                }}
+              />
+            )}
+
+            {/* Línea de umbral máximo operacional */}
+            {oxygenMax != null && (
+              <SparklinesReferenceLine
+                type="custom"
+                value={oxygenMax}
+                style={{
+                  stroke: '#f59e0b',
+                  strokeWidth: 1.5,
+                  strokeDasharray: '4 4',
+                  vectorEffect: 'non-scaling-stroke',
+                }}
+              />
+            )}
+          </Sparklines>
+        </div>
+
+        {/* Eje horizontal de fechas */}
+        <div className="flex items-center justify-between text-[11px] font-medium text-slate-400 dark:text-slate-500 pt-3 border-t border-slate-200/60 dark:border-slate-800/60 mt-2">
+          <span>Inicio: {firstTimestamp}</span>
+          <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold">
+            {values.length} muestras en hora de Chile
+          </span>
+          <span>Último: {lastTimestamp}</span>
+        </div>
+      </div>
+
+      {/* Leyenda inferior */}
+      <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-3 px-1 gap-2">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
-            <span className="w-3 h-1.5 bg-blue-600 rounded-full inline-block"></span>
-            Oxígeno Disuelto (mg/L)
+            <span className="w-3 h-1 bg-blue-600 rounded-full inline-block"></span>
+            Oxígeno Disuelto (react-sparklines)
           </span>
           {(oxygenMin != null || oxygenMax != null) && (
             <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
               <span className="w-3 h-0.5 border-t border-dashed border-amber-500 inline-block"></span>
-              Rango Operacional: {oxygenMin != null ? `Mín ${oxygenMin} mg/L` : ''} {oxygenMax != null ? `- Máx ${oxygenMax} mg/L` : ''}
+              Límites Operacionales: {oxygenMin != null ? `Mín ${oxygenMin} mg/L` : ''} {oxygenMax != null ? `- Máx ${oxygenMax} mg/L` : ''}
             </span>
           )}
         </div>
