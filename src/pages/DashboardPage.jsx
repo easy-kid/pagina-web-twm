@@ -104,22 +104,21 @@ export default function DashboardPage() {
             Panel de Control Operacional
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Supervisión en tiempo real de sensores de oxígeno disuelto en centros de cultivo
+            Supervisión en tiempo real de los sensores de oxígeno disuelto en centros de cultivo
           </p>
         </div>
       </div>
 
-      {/* Tarjetas de Resumen (Clicables para navegar a los listados correspondientes) */}
+      {/* Tarjetas de Resumen */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
         {/* Sin Transmitir (Rojos) */}
         <button
           type="button"
           onClick={() => handleCardClick('no_data')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
-            statusFilter === 'no_data'
-              ? 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20 ring-2 ring-rose-600 ring-offset-2 dark:ring-offset-slate-950'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-rose-300 dark:hover:border-rose-800/80 shadow-xs'
-          }`}
+          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${statusFilter === 'no_data'
+            ? 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20 ring-2 ring-rose-600 ring-offset-2 dark:ring-offset-slate-950'
+            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-rose-300 dark:hover:border-rose-800/80 shadow-xs'
+            }`}
         >
           <div className="flex justify-between items-start">
             <div>
@@ -143,11 +142,10 @@ export default function DashboardPage() {
         <button
           type="button"
           onClick={() => handleCardClick('out_of_range')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
-            statusFilter === 'out_of_range'
-              ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20 ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-slate-950'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-amber-300 dark:hover:border-amber-800/80 shadow-xs'
-          }`}
+          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${statusFilter === 'out_of_range'
+            ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20 ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-slate-950'
+            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-amber-300 dark:hover:border-amber-800/80 shadow-xs'
+            }`}
         >
           <div className="flex justify-between items-start">
             <div>
@@ -171,11 +169,10 @@ export default function DashboardPage() {
         <button
           type="button"
           onClick={() => handleCardClick('ok')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
-            statusFilter === 'ok'
-              ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20 ring-2 ring-emerald-600 ring-offset-2 dark:ring-offset-slate-950'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-emerald-300 dark:hover:border-emerald-800/80 shadow-xs'
-          }`}
+          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${statusFilter === 'ok'
+            ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20 ring-2 ring-emerald-600 ring-offset-2 dark:ring-offset-slate-950'
+            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-emerald-300 dark:hover:border-emerald-800/80 shadow-xs'
+            }`}
         >
           <div className="flex justify-between items-start">
             <div>
@@ -199,11 +196,10 @@ export default function DashboardPage() {
         <button
           type="button"
           onClick={() => handleCardClick('all')}
-          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
-            statusFilter === 'all'
-              ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-slate-950'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
-          }`}
+          className={`text-left p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${statusFilter === 'all'
+            ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-slate-950'
+            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
+            }`}
         >
           <div className="flex justify-between items-start">
             <div>
