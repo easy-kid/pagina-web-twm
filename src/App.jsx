@@ -11,7 +11,10 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          {/* Ruta pública de Login */}
           <Route path="/login" element={<LoginPage />} />
+
+          {/* Rutas protegidas dentro del Layout */}
           <Route
             element={
               <ProtectedRoute>
@@ -19,9 +22,14 @@ export default function App() {
               </ProtectedRoute>
             }
           >
+            {/* Dashboard de sensores y telemetría */}
             <Route path="/" element={<DashboardView />} />
+
+            {/* Gráfico histórico del sensor */}
             <Route path="/sensors/:id" element={<SensorDetailView />} />
           </Route>
+
+          {/* Redirección por defecto */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
