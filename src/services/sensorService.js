@@ -11,6 +11,17 @@ export const formatChileTime = (isoString) => {
   return isoString
 }
 
+// Función auxiliar para formatear fecha y hora completa (DD/MM/AAAA HH:mm)
+export const formatChileDateTime = (isoString) => {
+  if (!isoString) return 'Sin registros'
+  const match = String(isoString).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (match) {
+    const [, year, month, day, hour, minute] = match
+    return `${day}/${month}/${year} ${hour}:${minute}`
+  }
+  return isoString
+}
+
 export const sensorService = {
   // Trae los sensores con filtros opcionales (site_id, status: 'ok' | 'out_of_range' | 'no_data', page, page_size)
   getSensors: async (params = {}) => {
