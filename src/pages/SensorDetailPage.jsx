@@ -10,11 +10,11 @@ import {
   Loader2,
   Building,
   RefreshCw,
-} from 'lucide-react'
+} from '../components/Common/Icons'
 import { sensorService } from '../services/sensorService'
 import OxygenHistoryChart from '../components/Charts/OxygenHistoryChart'
 
-export default function SensorDetailView() {
+export default function SensorDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [sensor, setSensor] = useState(null)
@@ -39,6 +39,7 @@ export default function SensorDetailView() {
   }, [id])
 
   useEffect(() => {
+    setLoading(true)
     loadSensorData()
   }, [loadSensorData])
 
