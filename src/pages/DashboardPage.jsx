@@ -11,7 +11,7 @@ import {
   ChevronRight,
   Search,
 } from '../components/Common/Icons'
-import { sensorService } from '../services/sensorService'
+import { sensorService, formatChileDateTime } from '../services/sensorService'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -290,6 +290,7 @@ export default function DashboardPage() {
                   <th className="py-3 px-4">Centro</th>
                   <th className="py-3 px-4">Posición / Prof.</th>
                   <th className="py-3 px-4">Rango Óptimo</th>
+                  <th className="py-3 px-4">Última Actualización</th>
                   <th className="py-3 px-4">Estado</th>
                   <th className="py-3 px-4 text-right">Acciones</th>
                 </tr>
@@ -318,6 +319,22 @@ export default function DashboardPage() {
                       {sensor.oxygen_min != null && sensor.oxygen_max != null
                         ? `${sensor.oxygen_min} - ${sensor.oxygen_max} mg/L`
                         : 'No def.'}
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                      {sensor.last_reading?.at ? (
+                        <div>
+                          <span className="font-medium text-slate-800 dark:text-slate-200">
+                            {formatChileDateTime(sensor.last_reading.at)}
+                          </span>
+                          {sensor.last_reading.value != null && (
+                            <span className="block text-[11px] text-slate-400 dark:text-slate-500">
+                              {Number(sensor.last_reading.value).toFixed(2)} mg/L
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 dark:text-slate-500 italic">Sin registros</span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4">
                       {sensor.status === 'out_of_range' ? (
