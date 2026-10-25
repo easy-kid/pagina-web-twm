@@ -1,43 +1,63 @@
 /* eslint-disable react-refresh/only-export-components */
 /**
  * =============================================================================
- * CONTEXTO DE AUTENTICACIÓN (AuthContext)
+ * CONTEXTO GLOBAL DE AUTENTICACIÓN Y SESIÓN (AuthContext.jsx)
  * =============================================================================
- * Provee el estado global de la sesión del usuario a toda la aplicación.
+ * Proveedor de estado centralizado para la administración del ciclo de vida de la sesión
+ * del operador, conforme a la especificación OAuth2 Password Grant Type.
  * 
- * Conceptos clave:
- * - `AuthProvider`: Componente envolvente (wrapper) que almacena el estado global.
- * - `useAuth()`: Custom Hook para consumir el contexto en cualquier componente.
- * - `token`: Almacena el JWT / access_token de OAuth2 en memoria y en `localStorage`.
- * - `isAuthenticated`: Booleano derivado de la presencia válida del token.
+ * Principios de Ingeniería y Seguridad en Capa de Sesión:
+ * 1. Inicialización Perezosa del Estado (Lazy State Initialization):
+ *    Pasa una función a `useState(() => ...)` para acceder a `localStorage` una sola vez
+ *    durante la fase de hidratación del componente, evitando accesos sincrónicos repetitivos
+ *    al motor de almacenamiento del navegador en renderizados subsecuentes.
  * 
- * Flujo con FastAPI (OAuth2PasswordRequestForm):
- * FastAPI espera recibir las credenciales en formato `application/x-www-form-urlencoded`
- * en la ruta `/token`. Por eso se utiliza `new URLSearchParams()`.
+ * 2. Formato de Carga Útil Estándar OAuth2:
+ *    El endpoint `/token` de FastAPI requiere `Content-Type: application/x-www-form-urlencoded`.
+ *    Se emplea `new URLSearchParams()` para serializar `username` y `password` sin colisiones.
+ * 
+ * 3. Persistencia Atómica y Mitigación de Desincronización:
+ *    Al ejecutar `login`, las credenciales se almacenan simultáneamente en memoria volátil de React
+ *    y en el almacenamiento persistente (`localStorage`). En `logout`, se eliminan ambos
+ *    para imposibilitar la reutilización de tokens en transacciones posteriores.
  */
 
 import { createContext, useContext, useState } from 'react'
 import client from '../api/client'
 
-// Creación del objeto Context con valor inicial nulo
+/**
+ * Instancia del Contexto React para la Identidad de Usuario.
+ * Inicializada en `null` para forzar su uso dentro de un proveedor activo.
+ */
 const AuthContext = createContext(null)
 
+/**
+ * AuthProvider:
+ * Componente contenedor envolvente (Wrapper) que expone el estado y los métodos
+ * de autenticación a cualquier componente descendiente del árbol React.
+ *
+ * @param {Object} props - Propiedades del componente.
+ * @param {React.ReactNode} props.children - Nodos hijos a encapsular bajo el contexto.
+ * @returns {JSX.Element} Proveedor de contexto con estado compartido.
+ */
 export function AuthProvider({ children }) {
   /**
-   * Inicialización perezosa (lazy initial state):
-   * La función dentro de useState se ejecuta SOLO en el primer renderizado.
-   * Evita consultar repetidamente el almacenamiento síncrono `localStorage`.
+   * Estado reactivo del JWT (JSON Web Token):
+   * Recupera el token existente al montar el árbol de componentes.
    */
   const [token, setToken] = useState(() => {
     try {
       return localStorage.getItem('access_token')
     } catch (err) {
-      console.error('Error accediendo a localStorage:', err)
+      console.error('[AuthContext] Excepción al leer access_token desde localStorage:', err)
       return null
     }
   })
 
-  // Booleano reactivo que indica si hay un token persistido
+  /**
+   * Predicado booleano de autenticación:
+   * Determina si el cliente cuenta con un identificador de sesión activo.
+   */
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     try {
       return Boolean(localStorage.getItem('access_token'))
@@ -46,14 +66,43 @@ export function AuthProvider({ children }) {
     }
   })
 
+  /**
+   * Identificador del usuario autenticado:
+   * 1. Recupera el nombre de usuario persistido en `localStorage`.
+   * 2. Si no existe pero hay un token JWT válido, decodifica el claim `sub` del payload Base64.
+   */
+  const [username, setUsername] = useState(() => {
+    try {
+      const stored = localStorage.getItem('username')
+      if (stored) return stored
+
+      const token = localStorage.getItem('access_token')
+      if (token && token.includes('.')) {
+        const payloadBase64 = token.split('.')[1]
+        if (payloadBase64) {
+          const decoded = JSON.parse(atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/')))
+          return decoded.sub || decoded.username || null
+        }
+      }
+      return null
+    } catch {
+      return null
+    }
+  })
+
+  // Estado booleano para indicar operaciones de red en progreso
   const [loading, setLoading] = useState(false)
 
   /**
-   * login(username, password):
-   * 1. Codifica los parámetros en x-www-form-urlencoded para cumplir la especificación OAuth2.
-   * 2. Envía la petición POST al endpoint '/token'.
-   * 3. Extrae el `access_token` de la respuesta del servidor.
-   * 4. Persiste el token en `localStorage` y actualiza el estado reactivo.
+   * login:
+   * Despacha la solicitud de autenticación al servidor backend mediante OAuth2 Password Grant.
+   * Si las credenciales son válidas, persiste el `access_token` en `localStorage` y actualiza
+   * el estado interno de React.
+   *
+   * @param {string} username - Nombre o identificador del usuario.
+   * @param {string} password - Clave secreta en texto claro (sanitizada de inmediato tras el despacho).
+   * @returns {Promise<Object>} Objeto con la respuesta del servidor (`access_token`, `token_type`).
+   * @throws {Error} Excepción HTTP si las credenciales son rechazadas o falla la red.
    */
   const login = async (username, password) => {
     const params = new URLSearchParams()
@@ -68,21 +117,25 @@ export function AuthProvider({ children }) {
 
     const { access_token } = response.data
     localStorage.setItem('access_token', access_token)
+    localStorage.setItem('username', username)
     setToken(access_token)
+    setUsername(username)
     setIsAuthenticated(true)
 
     return response.data
   }
 
   /**
-   * logout():
-   * Destruye la sesión local:
-   * 1. Remueve el token de `localStorage`.
-   * 2. Limpia el estado de `token` e `isAuthenticated` a false.
+   * logout:
+   * Cierra de forma determinista la sesión del operador.
+   * Purga el token JWT del almacenamiento local y restablece los estados
+   * reactivos a sus valores iniciales nulos.
    */
   const logout = () => {
     localStorage.removeItem('access_token')
+    localStorage.removeItem('username')
     setToken(null)
+    setUsername(null)
     setIsAuthenticated(false)
   }
 
@@ -90,6 +143,8 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         token,
+        username,
+        user: username ? { username } : null,
         isAuthenticated,
         loading,
         setLoading,
@@ -103,14 +158,23 @@ export function AuthProvider({ children }) {
 }
 
 /**
- * useAuth():
- * Hook de utilidad para consumir el contexto fácilmente.
- * Lanza un error amigable si se intenta invocar fuera del árbol de <AuthProvider>.
+ * useAuth:
+ * Custom Hook de acceso seguro al contexto de autenticación.
+ * Lanza una excepción explicativa si se invoca fuera del alcance de un `<AuthProvider />`.
+ *
+ * @returns {{
+ *   token: string|null,
+ *   isAuthenticated: boolean,
+ *   loading: boolean,
+ *   setLoading: Function,
+ *   login: Function,
+ *   logout: Function
+ * }} Objeto de estado y controladores de autenticación.
  */
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) {
-    throw new Error('useAuth debe ser utilizado dentro de un AuthProvider')
+    throw new Error('useAuth debe ser utilizado obligatoriamente dentro de un AuthProvider')
   }
   return context
 }

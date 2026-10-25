@@ -1,8 +1,9 @@
 /**
  * =============================================================================
- * COMPONENTE DE TELEMETRÍA Y VISUALIZACIÓN CRONOLÓGICA (OxygenHistoryChart)
+ * COMPONENTE DE TELEMETRÍA Y VISUALIZACIÓN CRONOLÓGICA (OxygenHistoryChart.jsx)
  * =============================================================================
- * Implementación basada en la biblioteca de visualización declarativa Recharts.
+ * Renderizador declarativo de series temporales construido sobre el motor Recharts.
+ * Transforma arreglos de mediciones cronológicas en primitivas vectoriales SVG.
  * 
  * Principios de Ingeniería de Software y Arquitectura Gráfica:
  * 1. Abstracción del Modelo SVG Declarativo:
@@ -10,10 +11,10 @@
  *    vectoriales del DOM (`<svg>`, `<path>`, `<defs>`, `<g>`) mediante un grafo de
  *    coordenadas cartesianas parametrizado (ejes X/Y).
  * 
- * 2. `ResponsiveContainer` con Dimensión Inicial Paramétrica:
- *    Para mitigar el problema recurrente de colapso a 0px de altura derivado del cálculo
- *    asíncrono de ResizeObserver en layouts CSS Flexbox, se inyectan propiedades
- *    estáticas `height={320}`, `minHeight={320}` e `initialDimension={{ width: 600, height: 320 }}`.
+ * 2. Mitigación de Colapso con Dimensiones Iniciales (`ResponsiveContainer`):
+ *    Para mitigar el colapso recurrente a 0px de altura derivado del cálculo asíncrono
+ *    de `ResizeObserver` en layouts CSS Flexbox, se inyectan propiedades explícitas
+ *    `height={320}`, `minHeight={320}` e `initialDimension={{ width: 600, height: 320 }}`.
  *    Esto garantiza el renderizado determinista desde el ciclo de montaje inicial (Frame 0).
  * 
  * 3. Curva de Interpolación Monótona (`type="monotone"`):
@@ -24,9 +25,9 @@
  *    Inyecta líneas de referencia analíticas en el dominio numérico del eje Y,
  *    proporcionando contraste visual inmediato contra los límites ecológicos (`oxygenMin`, `oxygenMax`).
  * 
- * 5. Inyección Contextual de Tooltip (`CustomTooltip`):
- *    Intercepta los eventos del puntero del ratón o pantalla táctil, desacoplando
- *    el renderizado nativo para presentar un popup flotante con formato semántico y tipografía adaptativa.
+ * 5. Aislamiento de Fallos con Límites de Error (`ChartErrorBoundary`):
+ *    Intercepta excepciones en la fase de reconciliación de Recharts para que un error
+ *    en el grafo de dibujo no desmonte la vista principal de la aplicación.
  */
 
 import { Component } from 'react'
@@ -42,24 +43,51 @@ import {
 } from 'recharts'
 
 /**
- * Límite de Error Declarativo (ChartErrorBoundary):
- * Intercepta cualquier fallo en el ciclo de vida de renderizado de Recharts,
- * impidiendo que una excepción desmonte la vista principal.
+ * ChartErrorBoundary:
+ * Límite de Error Declarativo (React Error Boundary) implementado como componente de clase.
+ * Captura excepciones no controladas producidas en el subárbol de renderizado de Recharts.
+ *
+ * @extends Component
  */
 class ChartErrorBoundary extends Component {
+  /**
+   * Inicializa el estado local del interceptor de fallos.
+   * @param {Object} props - Propiedades del componente envolvente.
+   */
   constructor(props) {
     super(props)
     this.state = { hasError: false }
   }
 
+  /**
+   * getDerivedStateFromError:
+   * Ciclo de vida estático invocado inmediatamente tras ser arrojada una excepción.
+   * Actualiza el estado reactivo para activar la rama de renderizado de contingencia.
+   *
+   * @returns {{ hasError: boolean }}
+   */
   static getDerivedStateFromError() {
     return { hasError: true }
   }
 
+  /**
+   * componentDidCatch:
+   * Ciclo de vida para el registro de telemetría de errores del cliente.
+   *
+   * @param {Error} error - La excepción capturada en el motor gráfico.
+   * @param {Object} errorInfo - Árbol de trazas de componentes React (Component Stack Trace).
+   */
   componentDidCatch(error, errorInfo) {
     console.error('[OxygenHistoryChart] Error capturado en motor gráfico Recharts:', error, errorInfo)
   }
 
+  /**
+   * render:
+   * Despliega una interfaz de degradación elegante (Graceful Fallback UI) si ocurrió
+   * un fallo interno, o el contenido vectorial regular en caso nominal.
+   *
+   * @returns {JSX.Element}
+   */
   render() {
     if (this.state.hasError) {
       return (
@@ -78,12 +106,16 @@ class ChartErrorBoundary extends Component {
 }
 
 /**
- * Componente de Presentación Flotante (CustomTooltip):
- * Recibe de forma reactiva las propiedades inyectadas por el despachador de eventos de Recharts:
- * - `active`: Booleano que indica proximidad del cursor a un vértice temporal.
- * - `payload`: Array de entidades de datos asociadas a la coordenada activa.
- * - `label`: Rótulo temporal formateado del eje X.
- * - `isOffline`: Si el dispositivo está fuera de línea, adapta la semántica visual.
+ * CustomTooltip:
+ * Componente funcional de presentación flotante acoplado a los eventos del puntero de Recharts.
+ * Despliega el valor numérico con 2 decimales y el rótulo temporal correspondiente al punto de muestra.
+ *
+ * @param {Object} props - Propiedades inyectadas por el despachador de eventos de Recharts.
+ * @param {boolean} props.active - Indica proximidad del cursor al nodo de datos.
+ * @param {Array<Object>} props.payload - Arreglo de registros asociados a la coordenada activa.
+ * @param {string} props.label - Estampa de tiempo formateada del eje X.
+ * @param {boolean} [props.isOffline=false] - Bandera de sensor sin transmisión en vivo.
+ * @returns {JSX.Element|null} Contenedor con tipografía adaptativa y desenfoque (backdrop-blur).
  */
 function CustomTooltip({ active, payload, label, isOffline = false }) {
   if (!active || !payload || !payload.length) return null
@@ -98,13 +130,25 @@ function CustomTooltip({ active, payload, label, isOffline = false }) {
         <span className={`text-xl font-bold ${isOffline ? 'text-slate-300' : 'text-blue-400'}`}>{value}</span>
         <span className="text-xs text-slate-400 font-medium">mg/L</span>
       </div>
-      <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider font-semibold">
-        {isOffline ? 'Oxígeno Disuelto (Histórico Archivado)' : 'Oxígeno Disuelto'}
+      <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider font-semibold">
+        {isOffline ? 'Telemetría Archivada' : 'Oxígeno Disuelto'}
       </p>
     </div>
   )
 }
 
+/**
+ * OxygenHistoryChart:
+ * Función componente principal que orquesta el gráfico cartesiano de área para
+ * la serie de oxígeno disuelto.
+ *
+ * @param {Object} props - Propiedades del componente.
+ * @param {Array<Object>} props.data - Arreglo de puntos de telemetría `{ timestamp, value }`.
+ * @param {number|null} [props.oxygenMin] - Límite mínimo normativo para trazar la línea de referencia inferior.
+ * @param {number|null} [props.oxygenMax] - Límite máximo normativo para la línea de referencia superior.
+ * @param {boolean} [props.isOffline=false] - Indica si el nodo se encuentra desconectado.
+ * @returns {JSX.Element} Panel gráfico interactivo.
+ */
 export default function OxygenHistoryChart({
   data = [],
   oxygenMin = null,
@@ -120,116 +164,117 @@ export default function OxygenHistoryChart({
     )
   }
 
-  // Paleta de color según estado operacional: azul saturado en vivo, gris pizarra si está offline
+  // Paleta de gradientes y tonalidades según el estado operativo (Normal vs Inactivo/Offline)
   const strokeColor = isOffline ? '#64748b' : '#2563eb'
-  const stopColor = isOffline ? '#64748b' : '#3b82f6'
-  const gradientId = isOffline ? 'oxygenAreaGradientOffline' : 'oxygenAreaGradient'
+  const gradientStart = isOffline ? '#64748b' : '#3b82f6'
+  const gradientEnd = isOffline ? '#334155' : '#1d4ed8'
 
   return (
-    <div className="w-full">
-      {/* Contenedor con altura mínima asegurada y mitigación de desbordamiento */}
-      <div className="w-full h-80 min-h-[320px]">
-        <ChartErrorBoundary>
-          <ResponsiveContainer
-            width="100%"
-            height={320}
-            minHeight={320}
-            initialDimension={{ width: 600, height: 320 }}
+    <ChartErrorBoundary>
+      <div className="w-full relative min-h-[320px] transition-colors" style={{ height: 320 }}>
+        {/* Contenedor adaptativo con dimensiones explícitas para cálculo de viewport */}
+        <ResponsiveContainer
+          width="100%"
+          height={320}
+          minHeight={320}
+          initialDimension={{ width: 600, height: 320 }}
+        >
+          <AreaChart
+            data={data}
+            margin={{ top: 20, right: 30, left: 10, bottom: 25 }}
           >
-            <AreaChart
-              data={data}
-              margin={{ top: 15, right: 25, left: 10, bottom: 5 }}
-            >
-              {/* Definición del degradado SVG para el sombreado de área bajo la curva */}
-              <defs>
-                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={stopColor} stopOpacity={isOffline ? 0.25 : 0.4} />
-                  <stop offset="95%" stopColor={stopColor} stopOpacity={0.0} />
-                </linearGradient>
-              </defs>
+            {/* Definición vectorial de gradientes cromáticos para el relleno del área */}
+            <defs>
+              <linearGradient id="oxygenGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={gradientStart} stopOpacity={isOffline ? 0.25 : 0.45} />
+                <stop offset="95%" stopColor={gradientEnd} stopOpacity={0.0} />
+              </linearGradient>
+            </defs>
 
-              {/* Malla cartesiana ortogonal de baja opacidad */}
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                className="stroke-slate-200 dark:stroke-slate-800"
-                opacity={0.5}
-              />
+            {/* Malla cartesiana sutil para referencia de magnitud */}
+            <CartesianGrid
+              strokeDasharray="3 3"
+              vertical={false}
+              className="stroke-slate-200 dark:stroke-slate-800"
+              opacity={0.5}
+            />
 
-              {/* Eje X: Serie temporal discreta con intervalo mínimo de solapamiento */}
-              <XAxis
-                dataKey="timestamp"
-                tickLine={false}
-                axisLine={{ stroke: '#475569', opacity: 0.2 }}
-                tick={{ fontSize: 11 }}
-                className="text-slate-500 dark:text-slate-400 fill-current"
-                minTickGap={35}
-              />
+            {/* Eje de tiempo cronológico (Eje X) */}
+            <XAxis
+              dataKey="timestamp"
+              tickLine={false}
+              axisLine={{ stroke: '#475569', opacity: 0.2 }}
+              tick={{ fontSize: 11 }}
+              className="text-slate-500 dark:text-slate-400 fill-current"
+              minTickGap={35}
+            />
 
-              {/* Eje Y: Escala continua calibrada con formateador numérico defensivo */}
-              <YAxis
-                tickLine={false}
-                axisLine={{ stroke: '#475569', opacity: 0.2 }}
-                tick={{ fontSize: 11 }}
-                className="text-slate-500 dark:text-slate-400 fill-current"
-                tickFormatter={(v) => (v != null && !isNaN(v) ? `${Number(v).toFixed(1)} mg/L` : '')}
-                width={85}
-                domain={['auto', 'auto']}
-              />
+            {/* Eje numérico de concentración de oxígeno disuelto (Eje Y) */}
+            <YAxis
+              tickLine={false}
+              axisLine={{ stroke: '#475569', opacity: 0.2 }}
+              tick={{ fontSize: 11 }}
+              className="text-slate-500 dark:text-slate-400 fill-current"
+              tickFormatter={(v) => (v != null && !isNaN(v) ? `${Number(v).toFixed(1)} mg/L` : '')}
+              width={85}
+              domain={['auto', 'auto']}
+            />
 
-              {/* Componente flotante de inspección granular */}
-              <Tooltip content={<CustomTooltip isOffline={isOffline} />} />
+            {/* Ventana flotante de inspección interactiva */}
+            <Tooltip content={<CustomTooltip isOffline={isOffline} />} />
 
-              {/* Límites operacionales proyectados en el plano cartesiano */}
-              {oxygenMin != null && (
-                <ReferenceLine
-                  y={oxygenMin}
-                  stroke="#f59e0b"
-                  strokeDasharray="4 4"
-                  label={{
-                    value: `Mín ${oxygenMin} mg/L`,
-                    fill: '#d97706',
-                    fontSize: 10,
-                    position: 'insideTopRight',
-                    fontWeight: 600,
-                  }}
-                />
-              )}
-              {oxygenMax != null && (
-                <ReferenceLine
-                  y={oxygenMax}
-                  stroke="#f59e0b"
-                  strokeDasharray="4 4"
-                  label={{
-                    value: `Máx ${oxygenMax} mg/L`,
-                    fill: '#d97706',
-                    fontSize: 10,
-                    position: 'insideBottomRight',
-                    fontWeight: 600,
-                  }}
-                />
-              )}
-
-              {/* Primitiva gráfica de área con interpolación monótona */}
-              <Area
-                type="monotone"
-                dataKey="value"
-                name="Oxígeno Disuelto"
-                stroke={strokeColor}
-                strokeWidth={2.5}
-                strokeDasharray={isOffline ? '5 5' : undefined}
-                fillOpacity={1}
-                fill={`url(#${gradientId})`}
-                activeDot={{
-                  r: 6,
-                  fill: strokeColor,
-                  stroke: '#ffffff',
-                  strokeWidth: 2,
+            {/* Umbral operativo mínimo normativo */}
+            {oxygenMin != null && !isNaN(oxygenMin) && (
+              <ReferenceLine
+                y={Number(oxygenMin)}
+                stroke="#f59e0b"
+                strokeDasharray="4 4"
+                strokeWidth={1.5}
+                label={{
+                  value: `Mín ${Number(oxygenMin).toFixed(1)} mg/L`,
+                  position: 'insideBottomRight',
+                  fill: '#f59e0b',
+                  fontSize: 10,
+                  fontWeight: 600,
                 }}
               />
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartErrorBoundary>
+            )}
+
+            {/* Umbral operativo máximo normativo */}
+            {oxygenMax != null && !isNaN(oxygenMax) && (
+              <ReferenceLine
+                y={Number(oxygenMax)}
+                stroke="#f59e0b"
+                strokeDasharray="4 4"
+                strokeWidth={1.5}
+                label={{
+                  value: `Máx ${Number(oxygenMax).toFixed(1)} mg/L`,
+                  position: 'insideTopRight',
+                  fill: '#f59e0b',
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              />
+            )}
+
+            {/* Curva continua interpolada mediante splines monótonos */}
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke={strokeColor}
+              strokeWidth={2.5}
+              fill="url(#oxygenGradient)"
+              dot={false}
+              activeDot={{
+                r: 5,
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                fill: strokeColor,
+              }}
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Rótulos semánticos e indicadores de convención horaria */}
@@ -246,9 +291,10 @@ export default function OxygenHistoryChart({
             </span>
           )}
         </div>
-        <span>Hora Oficial de Chile (CLST/CLT)</span>
+        <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+          Hora Oficial de Chile (CLST/CLT)
+        </div>
       </div>
-    </div>
+    </ChartErrorBoundary>
   )
 }
-

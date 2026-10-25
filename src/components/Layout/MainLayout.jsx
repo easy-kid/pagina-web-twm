@@ -1,28 +1,23 @@
 /**
  * =============================================================================
- * COMPONENTE DE ESTRUCTURA Y NAVEGACIÓN GLOBAL (MainLayout)
+ * COMPONENTE DE ESTRUCTURA Y NAVEGACIÓN GLOBAL (MainLayout.jsx)
  * =============================================================================
- * Este componente actúa como contenedor envolvente ("Shell") para todas las rutas
- * autenticadas y protegidas de la aplicación (definido en App.jsx).
+ * Actúa como contenedor envolvente ("Shell") persistente para todas las rutas
+ * autenticadas y protegidas de la aplicación (definidas en App.jsx).
  *
- * Conceptos clave de Arquitectura en React y React Router:
- * 1. `<Outlet />`:
- *    Espacio reservado ("placeholder") donde React Router renderiza dinámicamente
- *    la ruta hija activa (por ejemplo, DashboardPage o SensorDetailPage).
+ * Principios de Arquitectura en React y React Router:
+ * 1. Composición de Enrutamiento Anidado (`<Outlet />`):
+ *    Marcador de posición declarativo donde el motor de React Router inyecta
+ *    dinámicamente el componente hijo asociado a la URL activa (Dashboard o Detalle de Sensor).
  *
- * 2. Navegación declarativa (`NavLink`):
- *    A diferencia de una etiqueta `<a href="...">` estándar que recarga toda la página,
- *    `NavLink` intercepta el evento de clic en el cliente (SPA), cambiando la URL
- *    sin perder el estado en memoria ni recargar recursos. Ofrece una función
- *    `({ isActive }) => string` para alternar estilos de selección activos.
+ * 2. Navegación en Cliente (Client-Side Routing con `NavLink`):
+ *    Intercepta los eventos de clic en el agente de usuario, mutando el historial HTML5
+ *    sin emitir peticiones de documento completas ni desechar el estado en memoria.
  *
- * 3. Integración con `useAuth()`:
- *    Permite cerrar sesión limpiando el token JWT guardado en `localStorage`
- *    y el estado de React, redirigiendo de inmediato a `/login`.
- *
- * 4. Diseño Responsivo (Mobile & Desktop):
- *    - En móvil (< 768px): Cabecera compacta con botón menú hamburguesa y ThemeToggle.
- *    - En escritorio (>= 768px): Barra lateral fija (`aside`) con ThemeToggle integrado en la cabecera del panel.
+ * 3. Diseño Responsivo y Adaptabilidad Multi-Dispositivo:
+ *    - En móvil (< 768px): Cabecera compacta con menú hamburguesa y botón de tema.
+ *    - En escritorio (>= 768px): Barra lateral fija (`aside`) con ThemeToggle integrado
+ *      en la cabecera y accesos persistentes.
  */
 
 import { useState } from 'react'
@@ -36,25 +31,41 @@ import {
 } from '../Common/Icons'
 import ThemeToggle from '../Theme/ThemeToggle'
 
+/**
+ * MainLayout:
+ * Función componente de plantilla global que encapsula el sidebar de navegación,
+ * la barra superior móvil y el punto de montaje de las rutas internas.
+ *
+ * @returns {JSX.Element} Estructura de layout compartida.
+ */
 export default function MainLayout() {
-  // Consumo del método `logout` desde el AuthContext global
-  const { logout } = useAuth()
+  // Consumo de la sesión y método `logout` desde el AuthContext global
+  const { logout, username } = useAuth()
   const navigate = useNavigate()
 
-  // Estado local para abrir/cerrar el menú desplegable en dispositivos móviles
+  // Nombre de usuario para presentación en la barra lateral
+  const userDisplayName = username || 'Operador'
+  // Iniciales para el avatar (ej. "operador1" -> "OP", "admin" -> "AD")
+  const userInitials = (userDisplayName.length >= 2
+    ? userDisplayName.slice(0, 2)
+    : userDisplayName
+  ).toUpperCase()
+
+  // Estado local para abrir o contraer el menú en dispositivos móviles
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   /**
-   * Manejador de cierre de sesión:
-   * 1. Llama a `logout()` para purgar el token de localStorage y resetear el usuario autenticado.
-   * 2. Redirige imperativamente a la pantalla de login.
+   * handleLogout:
+   * Procedimiento de cierre de sesión:
+   * 1. Invoca `logout()` para destruir el JWT en memoria y en `localStorage`.
+   * 2. Despacha una transición de navegación forzada hacia `/login`.
    */
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
 
-  // Elementos de la barra lateral de navegación
+  // Lista de descriptores de navegación principal
   const navItems = [
     {
       to: '/',
@@ -65,8 +76,12 @@ export default function MainLayout() {
   ]
 
   /**
-   * Generador dinámico de clases CSS para los enlaces de navegación según su estado activo.
-   * Provee feedback visual instantáneo de en qué sección se encuentra el usuario.
+   * getNavLinkClass:
+   * Generador de clases CSS de Tailwind que evalúa reactivamente el predicado `isActive`
+   * inyectado por `NavLink`, aplicando contraste de color y relieve según el estado de selección.
+   *
+   * @param {{ isActive: boolean }} param0 - Objeto de estado inyectado por React Router.
+   * @returns {string} Cadena de clases CSS resultantes.
    */
   const getNavLinkClass = ({ isActive }) =>
     `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive
@@ -142,10 +157,12 @@ export default function MainLayout() {
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center gap-3 mb-3 px-2">
             <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-semibold text-xs">
-              OP
+              {userInitials}
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">Operador / Monitor</p>
+              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate" title={userDisplayName}>
+                {userDisplayName}
+              </p>
             </div>
           </div>
 
