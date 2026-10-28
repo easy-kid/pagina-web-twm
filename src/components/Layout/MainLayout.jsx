@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard,
+  Building,
   LogOut,
   Menu,
   X,
@@ -25,6 +26,11 @@ export default function MainLayout() {
       label: 'Dashboard',
       icon: LayoutDashboard,
       end: true,
+    },
+    {
+      to: '/sites',
+      label: 'Centros de cultivo',
+      icon: Building,
     },
   ]
 

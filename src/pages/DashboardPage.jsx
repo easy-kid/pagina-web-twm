@@ -11,6 +11,8 @@ import {
   Search,
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
+import NotFoundPage from '../components/NotFoundPage'
+import { isNotFoundError } from '../api/client'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -27,6 +29,7 @@ export default function DashboardPage() {
   // Lista de sensores y filtro
   const [sensors, setSensors] = useState([])
   const [loadingSensors, setLoadingSensors] = useState(true)
+  const [notFound, setNotFound] = useState(false)
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'out_of_range' | 'no_data' | 'ok'
   const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(1)
@@ -40,6 +43,7 @@ export default function DashboardPage() {
       setMetrics(data)
     } catch (err) {
       console.error('Error al cargar métricas:', err)
+      if (isNotFoundError(err)) setNotFound(true)
     }
   }, [])
 
@@ -74,6 +78,7 @@ export default function DashboardPage() {
       setTotalSensorsCount(meta.totalCount || 0)
     } catch (err) {
       console.error('Error al cargar sensores:', err)
+      if (isNotFoundError(err)) setNotFound(true)
     } finally {
       setLoadingSensors(false)
     }
@@ -103,6 +108,10 @@ export default function DashboardPage() {
   const handleCardClick = (targetStatus) => {
     setStatusFilter(targetStatus)
     setPage(1)
+  }
+
+  if (notFound) {
+    return <NotFoundPage message="La API no encontró uno de los endpoints de sensores solicitados." />
   }
 
   return (

@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { LogIn, Loader2, Lock, User, AlertCircle } from '../components/Common/Icons'
 import ThemeToggle from '../components/Theme/ThemeToggle'
+import NotFoundPage from '../components/NotFoundPage'
+import { isNotFoundError } from '../api/client'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [endpointNotFound, setEndpointNotFound] = useState(false)
 
   const { login, isAuthenticated } = useAuth()
   const navigate = useNavigate()
@@ -29,7 +32,9 @@ export default function LoginPage() {
       navigate('/', { replace: true })
     } catch (err) {
       console.error('Error de autenticación:', err)
-      if (err.response?.status === 401 || err.response?.status === 422) {
+      if (isNotFoundError(err)) {
+        setEndpointNotFound(true)
+      } else if (err.response?.status === 401 || err.response?.status === 422) {
         setError('Credenciales inválidas. Por favor verifique su usuario y contraseña.')
       } else if (err.message === 'Network Error' || !err.response) {
         setError('No se pudo conectar con el servidor de autenticación.')
@@ -39,6 +44,10 @@ export default function LoginPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (endpointNotFound) {
+    return <NotFoundPage message="La API no encontró el endpoint de autenticación solicitado." />
   }
 
   return (

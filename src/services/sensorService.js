@@ -62,35 +62,25 @@ export const sensorService = {
 
   // Obtiene los conteos del dashboard combinando rutas como pide el enunciado
   getDashboardMetrics: async () => {
-    try {
-      // 1. Total sensores
-      // 2. Sensores sin transmitir (status=no_data)
-      // 3. Sensores fuera de rango (status=out_of_range)
-      const [totalRes, noDataRes, outOfRangeRes] = await Promise.all([
-        client.get('/sensors', { params: { page: 1, page_size: 1 } }),
-        client.get('/sensors', { params: { status: 'no_data', page: 1, page_size: 1 } }),
-        client.get('/sensors', { params: { status: 'out_of_range', page: 1, page_size: 1 } }),
-      ])
+    // 1. Total sensores
+    // 2. Sensores sin transmitir (status=no_data)
+    // 3. Sensores fuera de rango (status=out_of_range)
+    const [totalRes, noDataRes, outOfRangeRes] = await Promise.all([
+      client.get('/sensors', { params: { page: 1, page_size: 1 } }),
+      client.get('/sensors', { params: { status: 'no_data', page: 1, page_size: 1 } }),
+      client.get('/sensors', { params: { status: 'out_of_range', page: 1, page_size: 1 } }),
+    ])
 
-      const total = totalRes.data?.meta?.totalCount ?? 0
-      const offlineCount = noDataRes.data?.meta?.totalCount ?? 0
-      const outOfRangeCount = outOfRangeRes.data?.meta?.totalCount ?? 0
-      const normalCount = Math.max(0, total - offlineCount - outOfRangeCount)
+    const total = totalRes.data?.meta?.totalCount ?? 0
+    const offlineCount = noDataRes.data?.meta?.totalCount ?? 0
+    const outOfRangeCount = outOfRangeRes.data?.meta?.totalCount ?? 0
+    const normalCount = Math.max(0, total - offlineCount - outOfRangeCount)
 
-      return {
-        total,
-        offlineCount,
-        outOfRangeCount,
-        normalCount,
-      }
-    } catch (err) {
-      console.error('Error calculando métricas del dashboard:', err)
-      return {
-        total: 0,
-        offlineCount: 0,
-        outOfRangeCount: 0,
-        normalCount: 0,
-      }
+    return {
+      total,
+      offlineCount,
+      outOfRangeCount,
+      normalCount,
     }
   },
 

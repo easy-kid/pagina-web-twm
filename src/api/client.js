@@ -15,6 +15,8 @@ export class ApiError extends Error {
   }
 }
 
+export const isNotFoundError = (error) => error?.response?.status === 404
+
 const buildUrl = (endpoint, params) => {
   let url = `${API_URL}${endpoint}`
   if (params && typeof params === 'object') {
