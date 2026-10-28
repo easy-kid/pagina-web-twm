@@ -9,12 +9,15 @@ import {
   RefreshCw,
 } from '../components/Common/Icons'
 import { sensorService } from '../services/sensorService'
+import NotFoundPage from '../components/NotFoundPage'
+import { isNotFoundError } from '../api/client'
 
 export default function SensorDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [sensor, setSensor] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [notFound, setNotFound] = useState(false)
 
   const loadSensorData = useCallback(async () => {
     try {
@@ -22,6 +25,7 @@ export default function SensorDetailPage() {
       setSensor(sensorData)
     } catch (error) {
       console.error('Error al cargar detalle del sensor:', error)
+      if (isNotFoundError(error)) setNotFound(true)
     } finally {
       setRefreshing(false)
     }
@@ -38,6 +42,10 @@ export default function SensorDetailPage() {
 
   const isOutOfRange = sensor?.status === 'out_of_range'
   const isNoData = sensor?.status === 'no_data'
+
+  if (notFound) {
+    return <NotFoundPage message="La API no encontró el sensor o el endpoint solicitado." />
+  }
 
   return (
     <div className="space-y-6">
