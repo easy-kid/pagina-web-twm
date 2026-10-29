@@ -11,7 +11,39 @@ export const formatChileTime = (isoString) => {
   return isoString
 }
 
+// Función auxiliar para formatear fecha y hora completa (DD/MM/AAAA HH:mm)
+export const formatChileDateTime = (isoString) => {
+  if (!isoString) return 'Sin registros'
+  const match = String(isoString).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (match) {
+    const [, year, month, day, hour, minute] = match
+    return `${day}/${month}/${year} ${hour}:${minute}`
+  }
+  return isoString
+}
+
 export const sensorService = {
+  // Trae los centros de cultivo para mapear sus nombres y poblar los selectores
+  getSites: async () => {
+    try {
+      const response = await client.get('/sites')
+      const res = response.data
+      const items = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+        ? res
+        : res?.items || []
+      return items.map((site) => ({
+        id: site.id ?? site._id,
+        name: site.name || `Centro #${site.id ?? site._id}`,
+        location: site.location || '',
+      }))
+    } catch (err) {
+      console.error('Error al obtener centros:', err)
+      return []
+    }
+  },
+
   // Trae los sensores con filtros opcionales (site_id, status: 'ok' | 'out_of_range' | 'no_data', page, page_size)
   getSensors: async (params = {}) => {
     const cleanParams = {}
@@ -46,6 +78,36 @@ export const sensorService = {
         is_out_of_range: sensor.status === 'out_of_range',
       })),
       meta,
+    }
+  },
+
+  // Trae la totalidad de los sensores paginando hasta el final para filtrado y ordenamiento reactivo
+  getAllSensors: async (params = {}) => {
+    const pageSize = 50
+    let page = 1
+    const allSensors = []
+
+    while (true) {
+      const { items, meta } = await sensorService.getSensors({
+        ...params,
+        page,
+        page_size: pageSize,
+      })
+
+      allSensors.push(...items)
+      const expectedTotal = meta.totalCount || allSensors.length
+
+      if (items.length < pageSize || allSensors.length >= expectedTotal) {
+        break
+      }
+      page += 1
+    }
+
+    return {
+      items: allSensors,
+      meta: {
+        totalCount: allSensors.length,
+      },
     }
   },
 

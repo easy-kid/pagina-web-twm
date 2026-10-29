@@ -39,7 +39,6 @@ export default function SensorDetailView() {
   }, [id])
 
   useEffect(() => {
-    setLoading(true)
     loadSensorData()
   }, [loadSensorData])
 
