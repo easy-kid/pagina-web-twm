@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  X,
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
 
@@ -30,7 +31,6 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'out_of_range' | 'no_data' | 'ok'
   const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(1)
-  const [totalSensorsCount, setTotalSensorsCount] = useState(0)
   const [pageSize] = useState(10)
 
   // Cargar métricas ejecutivas
@@ -43,41 +43,33 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Cargar lista de sensores con filtro de estado, paginación y caché en memoria para respuesta instantánea
+  // Cargar totalidad de sensores según estado con caché en memoria para respuesta instantánea
   const loadSensors = useCallback(async () => {
-    const cacheKey = `${statusFilter}_${page}_${pageSize}`
+    const cacheKey = statusFilter
 
     if (cacheRef.current.has(cacheKey)) {
       const cached = cacheRef.current.get(cacheKey)
-      setSensors(cached.items)
-      setTotalSensorsCount(cached.totalCount)
+      setSensors(cached)
       setLoadingSensors(false)
     } else {
       setLoadingSensors(true)
     }
 
     try {
-      const params = {
-        page,
-        page_size: pageSize,
-      }
+      const params = {}
       if (statusFilter !== 'all') {
         params.status = statusFilter
       }
 
-      const { items, meta } = await sensorService.getSensors(params)
-      cacheRef.current.set(cacheKey, {
-        items,
-        totalCount: meta.totalCount || 0,
-      })
+      const { items } = await sensorService.getAllSensors(params)
+      cacheRef.current.set(cacheKey, items)
       setSensors(items)
-      setTotalSensorsCount(meta.totalCount || 0)
     } catch (err) {
       console.error('Error al cargar sensores:', err)
     } finally {
       setLoadingSensors(false)
     }
-  }, [page, pageSize, statusFilter])
+  }, [statusFilter])
 
   useEffect(() => {
     loadMetrics()
@@ -87,18 +79,46 @@ export default function DashboardPage() {
     loadSensors()
   }, [loadSensors])
 
-  const totalPages = Math.max(1, Math.ceil(totalSensorsCount / pageSize))
+  // Filtrado reactivo global multi-criterio (nombre, ID, centro, ubicación y estado)
+  const filteredSensors = useMemo(() => {
+    if (!searchTerm.trim()) return sensors
+    const term = searchTerm.toLowerCase().trim()
+    const words = term.split(/\s+/).filter(Boolean)
 
-  // Filtrado local adicional por nombre de sensor si el usuario busca en la tabla
-  const displayedSensors = sensors.filter((s) => {
-    if (!searchTerm.trim()) return true
-    const term = searchTerm.toLowerCase()
-    return (
-      s.name?.toLowerCase().includes(term) ||
-      String(s.id).includes(term) ||
-      String(s.site_id).includes(term)
-    )
-  })
+    return sensors.filter((s) => {
+      const idStr = String(s.id)
+      const nameStr = (s.name || '').toLowerCase()
+      const siteStr = `centro #${s.site_id} centro ${s.site_id} site ${s.site_id} ${s.site_id}`.toLowerCase()
+      const positionStr = (s.position || '').toLowerCase()
+      const statusStr =
+        s.status === 'out_of_range'
+          ? 'fuera de rango alerta anomalo'
+          : s.status === 'no_data'
+          ? 'sin transmitir offline inactivo'
+          : 'operativo normal ok'
+      const combined = `${idStr} #${idStr} ${nameStr} ${siteStr} ${positionStr} ${statusStr}`
+
+      return words.every((word) => combined.includes(word))
+    })
+  }, [sensors, searchTerm])
+
+  const totalPages = Math.max(1, Math.ceil(filteredSensors.length / pageSize))
+
+  // Paginación sobre el conjunto filtrado
+  const displayedSensors = useMemo(() => {
+    const startIndex = (page - 1) * pageSize
+    return filteredSensors.slice(startIndex, startIndex + pageSize)
+  }, [filteredSensors, page, pageSize])
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value)
+    setPage(1)
+  }
+
+  const handleClearSearch = () => {
+    setSearchTerm('')
+    setPage(1)
+  }
 
   const handleCardClick = (targetStatus) => {
     setStatusFilter(targetStatus)
@@ -216,15 +236,35 @@ export default function DashboardPage() {
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {/* Buscador de sensor */}
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <div className="relative w-full sm:w-72">
+              <label htmlFor="sensor-search-input" className="sr-only">
+                Buscar sensores
+              </label>
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
               <input
+                id="sensor-search-input"
                 type="text"
-                placeholder="Buscar por sensor o centro..."
+                placeholder="Buscar por sensor, ID o centro..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-3.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition"
+                onChange={handleSearchChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    handleClearSearch()
+                  }
+                }}
+                className="w-full pl-9 pr-9 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition"
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md transition cursor-pointer"
+                  title="Limpiar búsqueda (Esc)"
+                  aria-label="Limpiar búsqueda"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Selector de filtro directo */}
@@ -247,7 +287,29 @@ export default function DashboardPage() {
         {/* Tabla */}
         {displayedSensors.length === 0 && !loadingSensors ? (
           <div className="p-12 text-center text-slate-500 dark:text-slate-400">
-            <p className="text-sm font-medium">No se encontraron sensores para este criterio.</p>
+            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
+              <Search className="w-6 h-6" />
+            </div>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+              {searchTerm
+                ? `No se encontraron sensores para "${searchTerm}"`
+                : 'No se encontraron sensores para este criterio.'}
+            </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-sm mx-auto">
+              {searchTerm
+                ? 'Intenta con otro término, ID de sensor, centro o limpia el campo de búsqueda.'
+                : 'No hay sensores registrados bajo el filtro seleccionado.'}
+            </p>
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Limpiar búsqueda</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className={`overflow-x-auto transition-opacity duration-150 ${loadingSensors ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
@@ -339,30 +401,52 @@ export default function DashboardPage() {
         )}
 
         {/* Paginación */}
-        {totalPages > 1 && (
-          <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+        {(totalPages > 1 || searchTerm) && filteredSensors.length > 0 && (
+          <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
             <span>
-              Página <strong className="text-slate-800 dark:text-slate-200">{page}</strong> de{' '}
-              <strong className="text-slate-800 dark:text-slate-200">{totalPages}</strong> ({totalSensorsCount} sensores)
+              {searchTerm ? (
+                <>
+                  Encontrados <strong className="text-slate-800 dark:text-slate-200">{filteredSensors.length}</strong>{' '}
+                  {filteredSensors.length === 1 ? 'sensor' : 'sensores'} para{' '}
+                  <span className="italic font-medium text-slate-700 dark:text-slate-300">"{searchTerm}"</span>
+                  {totalPages > 1 && (
+                    <span className="text-slate-400 ml-1">
+                      (Página {page} de {totalPages})
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  Página <strong className="text-slate-800 dark:text-slate-200">{page}</strong> de{' '}
+                  <strong className="text-slate-800 dark:text-slate-200">{totalPages}</strong> ({sensors.length} sensores)
+                </>
+              )}
             </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition cursor-pointer text-slate-700 dark:text-slate-300"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition cursor-pointer text-slate-700 dark:text-slate-300"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition cursor-pointer text-slate-700 dark:text-slate-300"
+                  aria-label="Página anterior"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="px-2 font-medium text-slate-700 dark:text-slate-300">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition cursor-pointer text-slate-700 dark:text-slate-300"
+                  aria-label="Página siguiente"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

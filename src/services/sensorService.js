@@ -60,6 +60,34 @@ export const sensorService = {
     }
   },
 
+  // Trae la totalidad de sensores según filtros para búsqueda y paginación global en cliente
+  getAllSensors: async (params = {}) => {
+    const firstPage = await sensorService.getSensors({ ...params, page: 1, page_size: 100 })
+    const total = firstPage.meta?.totalCount || firstPage.items.length
+    if (total <= 100) {
+      return {
+        items: firstPage.items,
+        totalCount: total,
+      }
+    }
+
+    const totalPages = Math.ceil(total / 100)
+    const pagePromises = []
+    for (let p = 2; p <= totalPages; p++) {
+      pagePromises.push(sensorService.getSensors({ ...params, page: p, page_size: 100 }))
+    }
+    const otherPages = await Promise.all(pagePromises)
+    const allItems = [
+      ...firstPage.items,
+      ...otherPages.flatMap((res) => res.items),
+    ]
+
+    return {
+      items: allItems,
+      totalCount: total,
+    }
+  },
+
   // Obtiene los conteos del dashboard combinando rutas como pide el enunciado
   getDashboardMetrics: async () => {
     try {
