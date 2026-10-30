@@ -4,11 +4,13 @@ import client from '../api/client'
 
 const AuthContext = createContext(null)
 
+const getStoredToken = () => localStorage.getItem('access_token') || localStorage.getItem('token')
+
 export function AuthProvider({ children }) {
   // Inicialización inmediata desde localStorage para evitar cascadas de renderizado
   const [token, setToken] = useState(() => {
     try {
-      return localStorage.getItem('access_token')
+      return getStoredToken()
     } catch (err) {
       console.error('Error accediendo a localStorage:', err)
       return null
@@ -17,7 +19,7 @@ export function AuthProvider({ children }) {
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     try {
-      return Boolean(localStorage.getItem('access_token'))
+      return Boolean(getStoredToken())
     } catch {
       return false
     }
@@ -39,6 +41,7 @@ export function AuthProvider({ children }) {
 
     const { access_token } = response.data
     localStorage.setItem('access_token', access_token)
+    localStorage.removeItem('token')
     setToken(access_token)
     setIsAuthenticated(true)
 
@@ -48,6 +51,7 @@ export function AuthProvider({ children }) {
   // Cierre de sesión y limpieza de credenciales
   const logout = () => {
     localStorage.removeItem('access_token')
+    localStorage.removeItem('token')
     setToken(null)
     setIsAuthenticated(false)
   }

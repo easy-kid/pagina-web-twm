@@ -5,10 +5,12 @@ import {
   AlertTriangle,
   WifiOff,
   CheckCircle2,
+  AlertCircle,
   Building,
   RefreshCw,
 } from '../components/Common/Icons'
 import { sensorService } from '../services/sensorService'
+import { siteService } from '../services/siteService'
 import NotFoundPage from '../components/NotFoundPage'
 import { isNotFoundError } from '../api/client'
 
@@ -16,16 +18,33 @@ export default function SensorDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [sensor, setSensor] = useState(null)
-  const [refreshing, setRefreshing] = useState(false)
+  const [site, setSite] = useState(null)
+  const [siteNameError, setSiteNameError] = useState(false)
+  const [refreshing, setRefreshing] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [notFound, setNotFound] = useState(false)
 
   const loadSensorData = useCallback(async () => {
+    setRefreshing(true)
+    setLoadError('')
     try {
       const sensorData = await sensorService.getSensorById(id)
       setSensor(sensorData)
+      setSite(null)
+      setSiteNameError(false)
+      if (sensorData.site_id != null) {
+        try {
+          const siteData = await siteService.getSiteById(sensorData.site_id)
+          setSite(siteData)
+        } catch (error) {
+          console.error('Error al cargar el nombre del centro del sensor:', error)
+          setSiteNameError(true)
+        }
+      }
     } catch (error) {
       console.error('Error al cargar detalle del sensor:', error)
       if (isNotFoundError(error)) setNotFound(true)
+      else setLoadError('No fue posible cargar los datos del sensor. Intenta nuevamente.')
     } finally {
       setRefreshing(false)
     }
@@ -35,16 +54,26 @@ export default function SensorDetailPage() {
     loadSensorData()
   }, [loadSensorData])
 
-  const handleRefresh = () => {
-    setRefreshing(true)
-    loadSensorData()
-  }
-
   const isOutOfRange = sensor?.status === 'out_of_range'
   const isNoData = sensor?.status === 'no_data'
 
   if (notFound) {
     return <NotFoundPage message="La API no encontró el sensor o el endpoint solicitado." />
+  }
+
+  if (!sensor && refreshing) {
+    return <div className="py-16 text-center text-slate-500 dark:text-slate-400" role="status">Cargando datos del sensor...</div>
+  }
+
+  if (!sensor && loadError) {
+    return (
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300" role="alert">
+        <p>{loadError}</p>
+        <button type="button" onClick={loadSensorData} className="mt-3 font-semibold underline underline-offset-2">
+          Reintentar
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -63,7 +92,7 @@ export default function SensorDetailPage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
-            onClick={handleRefresh}
+            onClick={loadSensorData}
             disabled={refreshing}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
           >
@@ -72,6 +101,12 @@ export default function SensorDetailPage() {
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300" role="status">
+          {loadError} Se muestran los últimos datos disponibles.
+        </div>
+      )}
 
       {/* Tarjeta de Información General del Sensor */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs transition-colors">
@@ -82,7 +117,10 @@ export default function SensorDetailPage() {
               {sensor?.site_id && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-md">
                   <Building className="w-3 h-3 text-slate-400" />
-                  Centro de Cultivo #{sensor.site_id}
+                  {site?.name || `Centro ${sensor.site_id}`}
+                  <span className="ml-1 font-normal text-slate-500 dark:text-slate-400">
+                    (ID: {sensor.site_id}{siteNameError ? ' · nombre no disponible' : ''})
+                  </span>
                 </span>
               )}
             </div>
@@ -99,12 +137,17 @@ export default function SensorDetailPage() {
             ) : isNoData ? (
               <div className="px-4 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
                 <WifiOff className="w-4 h-4 text-rose-500" />
-                <span>Estado: Sin Transmitir (Inactivo)</span>
+                <span>Estado: Desconectado</span>
               </div>
-            ) : (
+            ) : sensor.status === 'ok' ? (
               <div className="px-4 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                 <span>Estado: Operativo (Normal)</span>
+              </div>
+            ) : (
+              <div className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-slate-500" />
+                <span>Estado: Desconocido</span>
               </div>
             )}
           </div>

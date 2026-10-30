@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Building, Radio, Search } from './Common/Icons'
-import { siteService } from '../services/siteService'
+import { Building, ClipboardCheck, Radio, Search } from './Common/Icons'
+import { getSiteArea, getSiteId, siteService } from '../services/siteService'
 import NotFoundPage from './NotFoundPage'
 import { isNotFoundError } from '../api/client'
 import SiteMap from './SiteMap'
@@ -15,7 +15,7 @@ export const SitesList = () => {
   const [error, setError] = useState('')
   const [notFound, setNotFound] = useState(false)
   const [search, setSearch] = useState('')
-  const [zoneFilter, setZoneFilter] = useState('')
+  const [areaFilter, setAreaFilter] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export const SitesList = () => {
         const siteList = await siteService.getSites()
         const sitesWithSensors = await Promise.all(
           siteList.map(async (site) => {
-            const siteId = site.id ?? site._id
+            const siteId = getSiteId(site)
             if (siteId == null) {
               throw new Error(`El centro "${site.name || 'sin nombre'}" no tiene un identificador.`)
             }
@@ -62,7 +62,7 @@ export const SitesList = () => {
 
   const filteredSites = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase()
-    const normalizedZone = zoneFilter.trim().toLowerCase()
+    const normalizedArea = areaFilter.trim().toLowerCase()
 
     return sites.filter((site) => {
       const matchesSearch =
@@ -74,11 +74,11 @@ export const SitesList = () => {
             .toLowerCase()
             .includes(normalizedSearch),
         )
-      const matchesZone =
-        !normalizedZone || String(site.zone || '').toLowerCase().includes(normalizedZone)
-      return matchesSearch && matchesZone
+      const matchesArea =
+        !normalizedArea || String(getSiteArea(site) || '').toLowerCase().includes(normalizedArea)
+      return matchesSearch && matchesArea
     })
-  }, [sites, search, zoneFilter])
+  }, [sites, search, areaFilter])
 
   const totalSensors = filteredSites.reduce((total, site) => total + site.sensors.length, 0)
 
@@ -137,12 +137,12 @@ export const SitesList = () => {
               />
             </label>
             <label>
-              <span className="sr-only">Filtrar por zona</span>
+              <span className="sr-only">Filtrar por área</span>
               <input
                 type="search"
-                placeholder="Filtrar por zona..."
-                value={zoneFilter}
-                onChange={(event) => setZoneFilter(event.target.value)}
+                placeholder="Filtrar por área..."
+                value={areaFilter}
+                onChange={(event) => setAreaFilter(event.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
             </label>
@@ -166,14 +166,14 @@ export const SitesList = () => {
                   : 'No hay centros ni sensores que coincidan con la búsqueda.'}
               </p>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Prueba con otro nombre, código o zona.
+                Prueba con otro nombre, código o área.
               </p>
             </div>
           ) : (
             <div className="space-y-6">
               {filteredSites.map((site, index) => (
                 <article
-                  key={site.id ?? `${site.name}-${index}`}
+                  key={getSiteId(site) ?? `${site.name}-${index}`}
                   className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
                 >
                   <header className="flex flex-col gap-4 border-b border-slate-100 p-5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
@@ -186,14 +186,29 @@ export const SitesList = () => {
                           {site.name || 'Centro sin nombre'}
                         </h2>
                         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-                          Código: {site.code || 'No especificado'} · Zona: {site.zone || 'No especificada'}
+                          Código: {site.code || 'No especificado'} · Área: {getSiteArea(site) || 'No especificada'}
+                          {' · '}ID: {getSiteId(site) ?? 'No disponible'}
                         </p>
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-3">
+                    <div className="flex shrink-0 flex-wrap items-center gap-3">
                       <span className="text-sm text-slate-500 dark:text-slate-400">
                         {site.sensors.length} {site.sensors.length === 1 ? 'sensor' : 'sensores'}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/interventions', {
+                          state: {
+                            openForm: true,
+                            targetType: 'site',
+                            siteId: String(getSiteId(site)),
+                          },
+                        })}
+                        className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3.5 py-2 text-sm font-bold text-white shadow-sm transition hover:border-blue-800 hover:bg-blue-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+                      >
+                        <ClipboardCheck className="h-4 w-4" />
+                        Intervenir
+                      </button>
                       <button
                         type="button"
                         onClick={() => setSelectedSite(site)}
@@ -224,7 +239,7 @@ export const SitesList = () => {
                               Estado
                             </th>
                             <th scope="col" className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                              Historial
+                              Acciones
                             </th>
                           </tr>
                         </thead>
@@ -232,12 +247,12 @@ export const SitesList = () => {
                           {site.sensors.map((sensor, sensorIndex) => {
                             const statusLabel = {
                               ok: 'En línea',
-                              no_data: 'Sin datos',
+                              no_data: 'Desconectado',
                               out_of_range: 'Fuera de rango',
                             }[sensor.status] || 'Desconocido'
                             const statusClass = {
                               ok: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
-                              no_data: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+                              no_data: 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300',
                               out_of_range: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
                             }[sensor.status] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                             const sensorId = sensor.id ?? sensor._id
@@ -256,6 +271,23 @@ export const SitesList = () => {
                                   </span>
                                 </td>
                                 <td className="px-5 py-4 text-right">
+                                  <div className="flex items-center justify-end gap-3">
+                                  <button
+                                    type="button"
+                                    disabled={sensorId == null || getSiteId(site) == null}
+                                    onClick={() => navigate('/interventions', {
+                                      state: {
+                                        openForm: true,
+                                        targetType: 'sensor',
+                                        siteId: String(getSiteId(site)),
+                                        sensorId: String(sensorId),
+                                      },
+                                    })}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-700 bg-blue-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+                                  >
+                                    <ClipboardCheck className="h-3.5 w-3.5" />
+                                    Intervenir
+                                  </button>
                                   <button
                                     type="button"
                                     disabled={sensorId == null}
@@ -264,6 +296,7 @@ export const SitesList = () => {
                                   >
                                     Ver mediciones
                                   </button>
+                                  </div>
                                 </td>
                               </tr>
                             )

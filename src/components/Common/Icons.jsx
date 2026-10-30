@@ -181,6 +181,16 @@ export function Building({ className = '', size = 20, ...props }) {
   )
 }
 
+export function ClipboardCheck({ className = '', size = 20, ...props }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+      <rect x="4" y="4" width="16" height="18" rx="2" />
+      <path d="M9 4.5h6a1.5 1.5 0 0 0-1.5-1.5h-3A1.5 1.5 0 0 0 9 4.5Z" />
+      <path d="m9 14 2 2 4-4" />
+    </svg>
+  )
+}
+
 export function RefreshCw({ className = '', size = 20, ...props }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>

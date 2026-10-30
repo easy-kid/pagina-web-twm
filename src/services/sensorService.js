@@ -52,7 +52,7 @@ export const sensorService = {
         id: sensor.id ?? sensor._id,
         name: sensor.sensor_name || sensor.name || `Sensor #${sensor.id}`,
         type: sensor.medition || sensor.type || 'Oxígeno Disuelto',
-        status: sensor.status || 'ok',
+        status: sensor.status || 'unknown',
         is_offline: sensor.status === 'no_data',
         is_out_of_range: sensor.status === 'out_of_range',
       })),
@@ -93,22 +93,25 @@ export const sensorService = {
     // 1. Total sensores
     // 2. Sensores sin transmitir (status=no_data)
     // 3. Sensores fuera de rango (status=out_of_range)
-    const [totalRes, noDataRes, outOfRangeRes] = await Promise.all([
+    const [totalRes, noDataRes, outOfRangeRes, onlineRes] = await Promise.all([
       client.get('/sensors', { params: { page: 1, page_size: 1 } }),
       client.get('/sensors', { params: { status: 'no_data', page: 1, page_size: 1 } }),
       client.get('/sensors', { params: { status: 'out_of_range', page: 1, page_size: 1 } }),
+      client.get('/sensors', { params: { status: 'ok', page: 1, page_size: 1 } }),
     ])
 
     const total = totalRes.data?.meta?.totalCount ?? 0
     const offlineCount = noDataRes.data?.meta?.totalCount ?? 0
     const outOfRangeCount = outOfRangeRes.data?.meta?.totalCount ?? 0
-    const normalCount = Math.max(0, total - offlineCount - outOfRangeCount)
+    const normalCount = onlineRes.data?.meta?.totalCount ?? 0
+    const unknownCount = Math.max(0, total - offlineCount - outOfRangeCount - normalCount)
 
     return {
       total,
       offlineCount,
       outOfRangeCount,
       normalCount,
+      unknownCount,
     }
   },
 
@@ -121,7 +124,7 @@ export const sensorService = {
       id: sensor.id ?? sensor._id,
       name: sensor.sensor_name || sensor.name || `Sensor #${sensor.id}`,
       type: sensor.medition || sensor.type || 'Oxígeno Disuelto',
-      status: sensor.status || 'ok',
+      status: sensor.status || 'unknown',
     }
   },
 

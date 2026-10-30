@@ -5,6 +5,7 @@ import { siteService } from '../services/siteService'
 import NotFoundPage from './NotFoundPage'
 import { isNotFoundError } from '../api/client'
 import SiteMap from './SiteMap'
+import { getSiteArea, getSiteId, getSiteLocation } from '../services/siteService'
 
 export const SiteDetail = () => {
   const { siteId } = useParams()
@@ -102,6 +103,9 @@ export const SiteDetail = () => {
             <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white md:text-3xl">
               {site.name || 'Centro sin nombre'}
             </h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              ID: {getSiteId(site) ?? siteId}
+            </p>
             <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <dt className="text-sm text-slate-500 dark:text-slate-400">Código</dt>
@@ -110,15 +114,15 @@ export const SiteDetail = () => {
                 </dd>
               </div>
               <div>
-                <dt className="text-sm text-slate-500 dark:text-slate-400">Zona</dt>
+                <dt className="text-sm text-slate-500 dark:text-slate-400">Área</dt>
                 <dd className="mt-1 font-medium text-slate-800 dark:text-slate-200">
-                  {site.zone || 'No especificada'}
+                  {getSiteArea(site) || 'No especificada'}
                 </dd>
               </div>
               <div>
                 <dt className="text-sm text-slate-500 dark:text-slate-400">Ubicación</dt>
                 <dd className="mt-1 font-medium text-slate-800 dark:text-slate-200">
-                  {site.location || 'No especificada'}
+                  {getSiteLocation(site)}
                 </dd>
               </div>
             </dl>
@@ -169,12 +173,12 @@ export const SiteDetail = () => {
                     {sensors.map((sensor, index) => {
                       const statusLabel = {
                         ok: 'En línea',
-                        no_data: 'Sin datos',
+                        no_data: 'Desconectado',
                         out_of_range: 'Fuera de rango',
                       }[sensor.status] || 'Desconocido'
                       const statusClass = {
                         ok: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
-                        no_data: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+                        no_data: 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300',
                         out_of_range: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
                       }[sensor.status] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                       const sensorId = sensor.id ?? sensor._id

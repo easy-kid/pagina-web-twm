@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage'
 import SensorDetailPage from './pages/SensorDetailPage'
 import { SiteDetail } from './components/SiteDetail'
 import { SitesList } from './components/SitesList'
+import InterventionsPage from './pages/InterventionsPage'
 import NotFoundPage from './components/NotFoundPage'
 
 export default function App() {
@@ -34,6 +35,9 @@ export default function App() {
             {/* Centros de cultivo y sensores asociados */}
             <Route path="/sites" element={<SitesList />} />
             <Route path="/sites/:siteId" element={<SiteDetail />} />
+
+            {/* Solicitudes locales de intervención */}
+            <Route path="/interventions" element={<InterventionsPage />} />
 
             {/* Página para rutas que no existen */}
             <Route path="*" element={<NotFoundPage />} />

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard,
   Building,
+  ClipboardCheck,
   LogOut,
   Menu,
   X,
@@ -31,6 +32,11 @@ export default function MainLayout() {
       to: '/sites',
       label: 'Centros de cultivo',
       icon: Building,
+    },
+    {
+      to: '/interventions',
+      label: 'Intervenciones',
+      icon: ClipboardCheck,
     },
   ]
 
