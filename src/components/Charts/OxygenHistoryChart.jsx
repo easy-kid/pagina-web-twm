@@ -41,8 +41,8 @@ export default function OxygenHistoryChart({
 
   return (
     <div className="w-full">
-      <div className="w-full h-72">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="w-full h-80 min-h-[320px]">
+        <ResponsiveContainer width="100%" height={320}>
           <AreaChart
             data={data}
             margin={{ top: 15, right: 25, left: 10, bottom: 5 }}
@@ -155,3 +155,4 @@ export default function OxygenHistoryChart({
     </div>
   )
 }
+

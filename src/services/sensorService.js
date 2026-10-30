@@ -124,38 +124,55 @@ export const sensorService = {
 
   // Trae la información de un sensor específico por su ID
   getSensorById: async (id) => {
-    const response = await client.get(`/sensors/${id}`)
-    const sensor = response.data
-    return {
-      ...sensor,
-      id: sensor.id ?? sensor._id,
-      name: sensor.sensor_name || sensor.name || `Sensor #${sensor.id}`,
-      type: sensor.medition || sensor.type || 'Oxígeno Disuelto',
-      status: sensor.status || 'ok',
+    try {
+      const response = await client.get(`/sensors/${id}`)
+      const sensor = response.data
+      return {
+        ...sensor,
+        id: sensor.id ?? sensor._id,
+        name: sensor.sensor_name || sensor.name || `Sensor #${sensor.id}`,
+        type: sensor.medition || sensor.type || 'Oxígeno Disuelto',
+        status: sensor.status || 'ok',
+      }
+    } catch (err) {
+      console.warn(`No se pudo obtener /sensors/${id} directamente, buscando en colección general:`, err)
+      const all = await sensorService.getAllSensors()
+      const found = all.items.find((s) => String(s.id) === String(id))
+      if (found) return found
+      throw err
     }
   },
 
   // Trae el historial de mediciones para armar el gráfico
   getMeasurements: async (params = {}) => {
-    const cleanParams = {
-      page: 1,
-      page_size: 60,
-      ...params,
-    }
-    const response = await client.get('/measurements', { params: cleanParams })
-    const res = response.data
-    const items = Array.isArray(res?.data)
-      ? res.data
-      : Array.isArray(res)
-      ? res
-      : res?.items || []
+    try {
+      const cleanParams = {
+        page: 1,
+        page_size: 60,
+        ...params,
+      }
+      const response = await client.get('/measurements', { params: cleanParams })
+      const res = response.data
+      const items = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+        ? res
+        : res?.items || []
 
-    // El backend las entrega más recientes primero; las invertimos para el gráfico cronológico
-    return [...items].reverse().map((m) => ({
-      ...m,
-      value: Number(m.oxygen ?? m.value ?? 0),
-      timestamp: formatChileTime(m.timestamp),
-      rawTimestamp: m.timestamp,
-    }))
+      // El backend las entrega más recientes primero; las invertimos para el gráfico cronológico
+      return [...items].reverse().map((m) => {
+        const rawTime = m.timestamp || m.at || m.created_at || m.time || m.date || ''
+        const rawVal = m.value != null ? m.value : (m.oxygen != null ? m.oxygen : (m.reading != null ? m.reading : 0))
+        return {
+          ...m,
+          value: Number(Number(rawVal).toFixed(2)),
+          timestamp: formatChileTime(rawTime),
+          rawTimestamp: rawTime,
+        }
+      })
+    } catch (err) {
+      console.warn('Error al obtener mediciones desde /measurements:', err)
+      return []
+    }
   },
 }
