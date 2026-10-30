@@ -120,6 +120,8 @@ export default function InterventionsPage() {
 
     const loadData = async () => {
       try {
+        // TODO (Backend Integration): Al conectar el backend real, interventionService.getInterventions()
+        // debe ser invocado asíncronamente contra GET /interventions
         const [siteList, savedInterventions] = await Promise.all([
           siteService.getSites(),
           Promise.resolve(interventionService.getInterventions()),
@@ -275,6 +277,9 @@ export default function InterventionsPage() {
     setSensorId('')
   }
 
+  // TODO (Backend Integration): La API FastAPI en https://ulamonitors-uat-back.grye.org/docs
+  // no expone DELETE /interventions. Este flujo debe reemplazarse por la acción de "Cerrar / Resolver"
+  // mediante PATCH /interventions/{id} con outcome ('back_online'|'replaced'|'reconfigured'|'no_fault_found').
   const handleDelete = (intervention) => {
     if (!window.confirm(`¿Estás seguro de eliminar la intervención para ${intervention.siteName}? Esta acción no se puede deshacer.`)) return
 
@@ -298,6 +303,13 @@ export default function InterventionsPage() {
     }
 
     try {
+      // TODO (Backend Integration): Para POST /interventions el esquema requerido es:
+      // {
+      //   site_id: Number(selectedSite.id),
+      //   sensor_id: targetType === 'sensor' ? Number(selectedSensor.id ?? selectedSensor._id) : null,
+      //   reason: `${suggestedAction ? suggestedAction + ' - ' : ''}${message}`.trim()
+      // }
+      // Nota: 'senderName' y 'senderRole' no se envían; el backend asigna 'opened_by' desde el token JWT.
       const interventionData = {
         senderName: senderName.trim(),
         senderRole: senderRole.trim(),
