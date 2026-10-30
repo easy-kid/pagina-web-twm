@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LogIn, Loader2, Lock, User, AlertCircle } from '../components/Common/Icons'
+import { LogIn, Loader2, Lock, User, AlertCircle, Eye, EyeOff } from '../components/Common/Icons'
 import ThemeToggle from '../components/Theme/ThemeToggle'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -16,6 +17,15 @@ export default function LoginPage() {
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/', { replace: true })
+    } else {
+      // Garantizar que los campos estén limpios al entrar a la vista de login
+      setUsername('')
+      setPassword('')
+      setShowPassword(false)
+    }
+    return () => {
+      // Purga de estado sensible al desmontar el componente
+      setPassword('')
     }
   }, [isAuthenticated, navigate])
 
@@ -24,11 +34,19 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
+    const submittedPassword = password
+    // Purga inmediata de la contraseña de la memoria de React
+    setPassword('')
+
     try {
-      await login(username, password)
+      await login(username, submittedPassword)
+      setUsername('')
+      setShowPassword(false)
       navigate('/', { replace: true })
     } catch (err) {
       console.error('Error de autenticación:', err)
+      // Aseguramos que la contraseña se mantenga limpia ante error
+      setPassword('')
       if (err.response?.status === 401 || err.response?.status === 422) {
         setError('Credenciales inválidas. Por favor verifique su usuario y contraseña.')
       } else if (err.message === 'Network Error' || !err.response) {
@@ -42,13 +60,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 px-4 py-12 relative transition-colors">
-      {/* Botón de tema en la esquina superior derecha */}
-      <div className="absolute top-5 right-5">
-        <ThemeToggle />
-      </div>
+    <div className="min-h-screen flex flex-col bg-slate-100 dark:bg-slate-950 transition-colors">
+      {/* Navbar superior consistente con el layout principal */}
+      <header className="w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 md:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 transition-colors">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">ULAtors</span>
+          <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">| Sistema de Monitoreo</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+        </div>
+      </header>
 
-      <div className="max-w-md w-full">
+      <div className="flex-1 flex items-center justify-center px-4 py-12">
+        <div className="max-w-md w-full">
         {/* Cabecera / Identidad */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">ULAtors</h1>
@@ -69,7 +94,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
             {/* Input Usuario */}
             <div>
               <label htmlFor="username" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
@@ -84,7 +109,7 @@ export default function LoginPage() {
                   name="username"
                   type="text"
                   required
-                  autoComplete="username"
+                  autoComplete="off"
                   disabled={loading}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -106,15 +131,24 @@ export default function LoginPage() {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   disabled={loading}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -140,5 +174,6 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  </div>
   )
 }

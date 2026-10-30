@@ -65,7 +65,6 @@ export default function MainLayout() {
             <h1 className="font-bold text-slate-900 dark:text-white text-lg leading-tight tracking-tight">ULAtors</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">Sistema de Monitoreo</p>
           </div>
-          <ThemeToggle />
         </div>
 
         {/* Enlaces de Navegación */}
@@ -114,6 +113,18 @@ export default function MainLayout() {
 
       {/* Contenedor Principal de Contenido */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Navbar superior Desktop */}
+        <header className="hidden md:flex items-center justify-between px-8 py-3.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20 transition-colors">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Supervisión en Tiempo Real
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+          </div>
+        </header>
+
         <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto">
           <Outlet />
         </main>
