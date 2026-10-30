@@ -33,12 +33,14 @@ export default function DashboardPage() {
   // Lista de sensores y filtro
   const [sensors, setSensors] = useState([])
   const [siteNames, setSiteNames] = useState({})
+  const [sitesList, setSitesList] = useState([])
   const [siteNamesError, setSiteNamesError] = useState(false)
   const [loadingSensors, setLoadingSensors] = useState(true)
   const [sensorError, setSensorError] = useState('')
   const [metricsError, setMetricsError] = useState('')
   const [notFound, setNotFound] = useState(false)
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'out_of_range' | 'no_data' | 'ok'
+  const [siteFilter, setSiteFilter] = useState('all') // 'all' | siteId
   const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(1)
   const [totalSensorsCount, setTotalSensorsCount] = useState(0)
@@ -50,12 +52,14 @@ export default function DashboardPage() {
     const loadSiteNames = async () => {
       try {
         const sites = await siteService.getSites()
+        const validSites = sites.filter((site) => getSiteId(site) != null && site.name)
         const namesById = Object.fromEntries(
-          sites
-            .filter((site) => getSiteId(site) != null && site.name)
-            .map((site) => [String(getSiteId(site)), site.name]),
+          validSites.map((site) => [String(getSiteId(site)), site.name]),
         )
-        if (active) setSiteNames(namesById)
+        if (active) {
+          setSiteNames(namesById)
+          setSitesList(validSites)
+        }
       } catch (error) {
         console.error('Error al cargar los nombres de los centros:', error)
         if (active) setSiteNamesError(true)
@@ -81,9 +85,9 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Cargar lista de sensores con filtro de estado, paginación y caché en memoria para respuesta instantánea
+  // Cargar lista de sensores con filtro de estado, centro, paginación y caché en memoria
   const loadSensors = useCallback(async () => {
-    const cacheKey = `${statusFilter}_${page}_${pageSize}`
+    const cacheKey = `${statusFilter}_${siteFilter}_${page}_${pageSize}`
 
     if (cacheRef.current.has(cacheKey)) {
       const cached = cacheRef.current.get(cacheKey)
@@ -103,6 +107,9 @@ export default function DashboardPage() {
       if (statusFilter !== 'all') {
         params.status = statusFilter
       }
+      if (siteFilter !== 'all') {
+        params.site_id = siteFilter
+      }
 
       const { items, meta } = await sensorService.getSensors(params)
       cacheRef.current.set(cacheKey, {
@@ -118,7 +125,7 @@ export default function DashboardPage() {
     } finally {
       setLoadingSensors(false)
     }
-  }, [page, pageSize, statusFilter])
+  }, [page, pageSize, statusFilter, siteFilter])
 
   useEffect(() => {
     loadMetrics()
@@ -130,14 +137,32 @@ export default function DashboardPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalSensorsCount / pageSize))
 
-  // Filtrado local adicional por nombre de sensor si el usuario busca en la tabla
+  // Búsqueda inteligente: filtra por nombre de sensor, nombre de centro, posición, profundidad o estado
   const displayedSensors = sensors.filter((s) => {
     if (!searchTerm.trim()) return true
-    const term = searchTerm.toLowerCase()
+    const term = searchTerm.toLowerCase().trim()
+    const sensorName = (s.name || '').toLowerCase()
+    const siteName = (siteNames[String(s.site_id)] || '').toLowerCase()
+    const position = (s.position || '').toLowerCase()
+    const depthStr = s.depth != null ? `${s.depth}m ${s.depth}` : ''
+    const typeStr = (s.type || '').toLowerCase()
+    const sensorId = String(s.id ?? '')
+    const siteId = String(s.site_id ?? '')
+
+    const statusMatch =
+      ((term.includes('operat') || term === 'ok' || term.includes('normal')) && s.status === 'ok') ||
+      ((term.includes('descon') || term.includes('off') || term.includes('inact') || term.includes('sin dat')) && s.status === 'no_data') ||
+      ((term.includes('rango') || term.includes('alert') || term.includes('anom')) && s.status === 'out_of_range')
+
     return (
-      s.name?.toLowerCase().includes(term) ||
-      String(s.id).includes(term) ||
-      String(s.site_id).includes(term)
+      sensorName.includes(term) ||
+      siteName.includes(term) ||
+      position.includes(term) ||
+      depthStr.includes(term) ||
+      typeStr.includes(term) ||
+      sensorId.includes(term) ||
+      siteId === term ||
+      statusMatch
     )
   })
 
@@ -147,7 +172,7 @@ export default function DashboardPage() {
   }
 
   const retrySensors = () => {
-    cacheRef.current.delete(`${statusFilter}_${page}_${pageSize}`)
+    cacheRef.current.delete(`${statusFilter}_${siteFilter}_${page}_${pageSize}`)
     loadSensors()
   }
 
@@ -277,32 +302,64 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Buscador de sensor */}
-            <div className="relative">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-wrap">
+            {/* Buscador inteligente: nombre de sensor, centro, posición, estado */}
+            <div className="relative min-w-[220px] flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
-                placeholder="Buscar por sensor o centro..."
+                placeholder="Buscar por sensor, centro, posición..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-3.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition"
+                className="w-full pl-9 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition"
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title="Limpiar búsqueda"
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
-            {/* Selector de filtro directo */}
+            {/* Selector de Centro */}
+            <select
+              value={siteFilter}
+              onChange={(e) => {
+                setSiteFilter(e.target.value)
+                setPage(1)
+              }}
+              aria-label="Filtrar por centro"
+              className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="all">Todos los centros</option>
+              {sitesList.map((site) => {
+                const sId = String(getSiteId(site))
+                return (
+                  <option key={sId} value={sId}>
+                    {site.name || `Centro #${sId}`}
+                  </option>
+                )
+              })}
+            </select>
+
+            {/* Selector de Estado */}
             <select
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value)
                 setPage(1)
               }}
-              className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Filtrar por estado"
+              className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="no_data">Desconectados</option>
-              <option value="out_of_range">Fuera de Rango</option>
-              <option value="ok">Operativos</option>
               <option value="all">Todos los estados</option>
+              <option value="ok">Operativos</option>
+              <option value="out_of_range">Fuera de Rango</option>
+              <option value="no_data">Desconectados</option>
             </select>
           </div>
         </div>
