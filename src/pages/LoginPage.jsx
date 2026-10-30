@@ -42,13 +42,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 px-4 py-12 relative transition-colors">
-      {/* Botón de tema en la esquina superior derecha */}
-      <div className="absolute top-5 right-5">
-        <ThemeToggle />
-      </div>
+    <div className="min-h-screen flex flex-col bg-slate-100 dark:bg-slate-950 transition-colors">
+      {/* Navbar superior consistente con el layout principal */}
+      <header className="w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 md:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 transition-colors">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">ULAtors</span>
+          <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">| Sistema de Monitoreo</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+        </div>
+      </header>
 
-      <div className="max-w-md w-full">
+      <div className="flex-1 flex items-center justify-center px-4 py-12">
+        <div className="max-w-md w-full">
         {/* Cabecera / Identidad */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">ULAtors</h1>
@@ -140,5 +147,6 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  </div>
   )
 }

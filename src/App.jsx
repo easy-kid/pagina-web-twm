@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { ThemeProvider } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/Layout/MainLayout'
 import LoginPage from './pages/LoginPage'
@@ -8,31 +9,34 @@ import SensorDetailPage from './pages/SensorDetailPage'
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          {/* Ruta pública de Login */}
-          <Route path="/login" element={<LoginPage />} />
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            {/* Ruta pública de Login */}
+            <Route path="/login" element={<LoginPage />} />
 
-          {/* Rutas protegidas dentro del Layout */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <MainLayout />
-              </ProtectedRoute>
-            }
-          >
-            {/* Dashboard de sensores y telemetría */}
-            <Route path="/" element={<DashboardPage />} />
+            {/* Rutas protegidas dentro del Layout */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <MainLayout />
+                </ProtectedRoute>
+              }
+            >
+              {/* Dashboard de sensores y telemetría */}
+              <Route path="/" element={<DashboardPage />} />
 
-            {/* Gráfico histórico del sensor */}
-            <Route path="/sensors/:id" element={<SensorDetailPage />} />
-          </Route>
+              {/* Gráfico histórico del sensor */}
+              <Route path="/sensors/:id" element={<SensorDetailPage />} />
+            </Route>
 
-          {/* Redirección por defecto */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+            {/* Redirección por defecto */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   )
 }
+
