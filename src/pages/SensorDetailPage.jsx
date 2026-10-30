@@ -2,38 +2,59 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
+  Activity,
+  AlertCircle,
   AlertTriangle,
   WifiOff,
   CheckCircle2,
+  Loader2,
   Building,
   RefreshCw,
 } from '../components/Common/Icons'
 import { sensorService } from '../services/sensorService'
+import OxygenHistoryChart from '../components/Charts/OxygenHistoryChart'
 
 export default function SensorDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [sensor, setSensor] = useState(null)
+  const [measurements, setMeasurements] = useState([])
+  const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
   const loadSensorData = useCallback(async () => {
     try {
-      const sensorData = await sensorService.getSensorById(id)
+      const [sensorData, measData] = await Promise.all([
+        sensorService.getSensorById(id),
+        sensorService.getMeasurements({ sensor_id: id, page_size: 60 }),
+      ])
       setSensor(sensorData)
+      setMeasurements(measData || [])
     } catch (error) {
       console.error('Error al cargar detalle del sensor:', error)
     } finally {
+      setLoading(false)
       setRefreshing(false)
     }
   }, [id])
 
   useEffect(() => {
+    setLoading(true)
     loadSensorData()
   }, [loadSensorData])
 
   const handleRefresh = () => {
     setRefreshing(true)
     loadSensorData()
+  }
+
+  if (loading) {
+    return (
+      <div className="p-16 flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Cargando telemetría del sensor...</p>
+      </div>
+    )
   }
 
   const isOutOfRange = sensor?.status === 'out_of_range'
@@ -49,7 +70,7 @@ export default function SensorDetailPage() {
           className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-2 rounded-xl shadow-xs transition cursor-pointer self-start"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Volver</span>
+          <span>Volver al Dashboard</span>
         </button>
 
         <div className="flex items-center gap-2.5">
@@ -121,6 +142,39 @@ export default function SensorDetailPage() {
             <span className="text-slate-800 dark:text-white font-semibold text-sm mt-0.5 block">{sensor?.oxygen_max != null ? `${sensor.oxygen_max} mg/L` : 'N/A'}</span>
           </div>
         </div>
+      </div>
+
+      {/* Gráfico Histórico Recharts */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs transition-colors">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              Historial de Mediciones de Oxígeno Disuelto (Recharts)
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Valores reportados en tiempo real (mg/L)
+            </p>
+          </div>
+          <span className="text-xs text-slate-400 dark:text-slate-500">
+            Últimas {measurements.length} muestras
+          </span>
+        </div>
+
+        {measurements.length === 0 ? (
+          <div className="text-center py-16 text-slate-400 dark:text-slate-500 flex flex-col items-center gap-2">
+            <AlertCircle className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+            <p className="text-sm font-medium">No hay registros de telemetría recientes para este sensor.</p>
+          </div>
+        ) : (
+          <div className="py-2">
+            <OxygenHistoryChart
+              data={measurements}
+              oxygenMin={sensor?.oxygen_min}
+              oxygenMax={sensor?.oxygen_max}
+            />
+          </div>
+        )}
       </div>
     </div>
   )
