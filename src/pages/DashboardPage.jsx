@@ -1,26 +1,60 @@
+/**
+ * =============================================================================
+ * MÓDULO DE PANEL DE CONTROL Y TELEMETRÍA CONSOLIDADA (DashboardPage)
+ * =============================================================================
+ * Vista central de supervisión operativa y monitoreo de la red de sensores en tiempo real.
+ * 
+ * Principios de Ingeniería de Software y Patrones Arquitecturales:
+ * 1. Estrategia de Caché en Memoria sin Re-renderizado (`useRef<Map>`):
+ *    - Emplea `useRef(new Map())` como almacén asociativo de acceso $O(1)$ indexado por
+ *      el estado del filtro (`statusFilter`). Al mutar una referencia en lugar de un estado,
+ *      se preservan los datos entre cambios de vista sin desencadenar cascadas de re-renderizados
+ *      ni incurrir en llamadas redundantes a la red (Cache-First Read Strategy).
+ * 
+ * 2. Pipeline de Búsqueda Reactiva Multicriterio (`useMemo`):
+ *    - Procesa en el cliente un filtrado de complejidad temporal $O(N)$ evaluando simultáneamente
+ *      múltiples descriptores: nombre del sensor, identificador canónico (`#ID`), centro de cultivo
+ *      asociado (`#site_id`), posición topográfica (jaula/pontón) y concordancia semántica de estado.
+ * 
+ * 3. Paginación Local Basada en Segmentación de Memoria:
+ *    - Segmenta de forma eficiente el subconjunto filtrado en bloques fijos (`pageSize = 10`),
+ *      minimizando la manipulación del árbol de nodos DOM a solo los elementos visibles en el viewport.
+ * 
+ * 4. Transición de Estado Vía History State (`navigate(..., { state: { sensor } })`):
+ *    - Al activar el disparador "Ver Gráfico", transfiere la entidad completa ya presente en memoria
+ *      hacia el enrutador de `/sensors/:id`, permitiendo la hidratación inmediata en la vista receptora.
+ * 
+ * 5. Agregación Paralela de Métricas Ejecutivas (KPIs):
+ *    - Calcula las métricas globales consolidadas (sensores sin transmitir, fuera de rango, operativos)
+ *      mediante consultas concurrentes independientes, desacoplando el resumen gerencial de la tabla de telemetría.
+ */
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
   WifiOff,
   CheckCircle2,
-  ArrowRight,
   Radio,
   ChevronLeft,
   ChevronRight,
   Search,
   X,
   Activity,
-  Loader2,
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
-import OxygenHistoryChart from '../components/Charts/OxygenHistoryChart'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+
+  /**
+   * useRef para la caché en memoria:
+   * A diferencia de useState, mutar `cacheRef.current` no dispara re-renderizados,
+   * permitiendo persistir datos entre cambios de estado sin re-descargar de la API.
+   */
   const cacheRef = useRef(new Map())
 
-  // Métricas del sistema calculadas combinando rutas
+  // Métricas consolidadas del sistema (tarjetas KPI superiores)
   const [metrics, setMetrics] = useState({
     total: 0,
     offlineCount: 0,
@@ -28,7 +62,7 @@ export default function DashboardPage() {
     normalCount: 0,
   })
 
-  // Lista de sensores y filtro
+  // Lista de sensores y estados de control
   const [sensors, setSensors] = useState([])
   const [loadingSensors, setLoadingSensors] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'out_of_range' | 'no_data' | 'ok'
@@ -36,26 +70,11 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1)
   const [pageSize] = useState(10)
 
-  // Estado del modal de gráfico Recharts
-  const [modalSensor, setModalSensor] = useState(null)
-  const [modalMeasurements, setModalMeasurements] = useState([])
-  const [modalLoading, setModalLoading] = useState(false)
-
-  const handleOpenChartModal = async (sensor) => {
-    setModalSensor(sensor)
-    setModalLoading(true)
-    try {
-      const data = await sensorService.getMeasurements({ sensor_id: sensor.id, page_size: 60 })
-      setModalMeasurements(data || [])
-    } catch (err) {
-      console.error('Error al cargar mediciones para gráfico:', err)
-      setModalMeasurements([])
-    } finally {
-      setModalLoading(false)
-    }
-  }
-
-  // Cargar métricas ejecutivas
+  /**
+   * Carga de métricas ejecutivas:
+   * Invoca `sensorService.getDashboardMetrics()` que consulta simultáneamente
+   * los totales por estado.
+   */
   const loadMetrics = useCallback(async () => {
     try {
       const data = await sensorService.getDashboardMetrics()
@@ -65,7 +84,12 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Cargar totalidad de sensores según estado con caché en memoria para respuesta instantánea
+  /**
+   * Carga de sensores con estrategia Cache-First:
+   * 1. Verifica si la clave `statusFilter` ya existe en la caché local.
+   * 2. Si existe, muestra los datos cacheados de inmediato.
+   * 3. En segundo plano consulta la API y actualiza la caché y el estado.
+   */
   const loadSensors = useCallback(async () => {
     const cacheKey = statusFilter
 
@@ -93,15 +117,21 @@ export default function DashboardPage() {
     }
   }, [statusFilter])
 
+  // Disparar carga de métricas al montar el componente
   useEffect(() => {
     loadMetrics()
   }, [loadMetrics])
 
+  // Recargar sensores al cambiar el filtro de estado
   useEffect(() => {
     loadSensors()
   }, [loadSensors])
 
-  // Filtrado reactivo global multi-criterio (nombre, ID, centro, ubicación y estado)
+  /**
+   * Filtrado reactivo multi-criterio:
+   * Memoizado para evitar recalcular en renders no relacionados.
+   * Permite buscar por palabras separadas ("sensor 12 jaula") en cualquier orden.
+   */
   const filteredSensors = useMemo(() => {
     if (!searchTerm.trim()) return sensors
     const term = searchTerm.toLowerCase().trim()
@@ -126,7 +156,9 @@ export default function DashboardPage() {
 
   const totalPages = Math.max(1, Math.ceil(filteredSensors.length / pageSize))
 
-  // Paginación sobre el conjunto filtrado
+  /**
+   * Segmentación de sensores para la página actual (Paginación en cliente)
+   */
   const displayedSensors = useMemo(() => {
     const startIndex = (page - 1) * pageSize
     return filteredSensors.slice(startIndex, startIndex + pageSize)
@@ -391,7 +423,7 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-end">
                         <button
                           type="button"
-                          onClick={() => handleOpenChartModal(sensor)}
+                          onClick={() => navigate(`/sensors/${sensor.id}`, { state: { sensor } })}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
                         >
                           <Activity className="w-3.5 h-3.5" />
@@ -456,75 +488,6 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-
-      {/* Modal flotante de Gráfico Recharts */}
-      {modalSensor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-3xl p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-bold text-slate-400">Sensor #{modalSensor.id}</span>
-                  {modalSensor.site_id && (
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      • Centro #{modalSensor.site_id}
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  {modalSensor.name} - Historial de Oxígeno (Recharts)
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModalSensor(null)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                aria-label="Cerrar gráfico"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="py-4">
-              {modalLoading ? (
-                <div className="py-20 flex flex-col items-center justify-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-2" />
-                  <p className="text-xs font-medium text-slate-400">Cargando mediciones con Recharts...</p>
-                </div>
-              ) : (
-                <OxygenHistoryChart
-                  data={modalMeasurements}
-                  oxygenMin={modalSensor.oxygen_min}
-                  oxygenMax={modalSensor.oxygen_max}
-                />
-              )}
-            </div>
-
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  const sid = modalSensor.id
-                  setModalSensor(null)
-                  navigate(`/sensors/${sid}`)
-                }}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-              >
-                <span>Ver ficha técnica detallada</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalSensor(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition cursor-pointer"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
