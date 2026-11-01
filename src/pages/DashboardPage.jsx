@@ -1,23 +1,60 @@
+/**
+ * =============================================================================
+ * MÓDULO DE PANEL DE CONTROL Y TELEMETRÍA CONSOLIDADA (DashboardPage)
+ * =============================================================================
+ * Vista central de supervisión operativa y monitoreo de la red de sensores en tiempo real.
+ * 
+ * Principios de Ingeniería de Software y Patrones Arquitecturales:
+ * 1. Estrategia de Caché en Memoria sin Re-renderizado (`useRef<Map>`):
+ *    - Emplea `useRef(new Map())` como almacén asociativo de acceso $O(1)$ indexado por
+ *      el estado del filtro (`statusFilter`). Al mutar una referencia en lugar de un estado,
+ *      se preservan los datos entre cambios de vista sin desencadenar cascadas de re-renderizados
+ *      ni incurrir en llamadas redundantes a la red (Cache-First Read Strategy).
+ * 
+ * 2. Pipeline de Búsqueda Reactiva Multicriterio (`useMemo`):
+ *    - Procesa en el cliente un filtrado de complejidad temporal $O(N)$ evaluando simultáneamente
+ *      múltiples descriptores: nombre del sensor, identificador canónico (`#ID`), centro de cultivo
+ *      asociado (`#site_id`), posición topográfica (jaula/pontón) y concordancia semántica de estado.
+ * 
+ * 3. Paginación Local Basada en Segmentación de Memoria:
+ *    - Segmenta de forma eficiente el subconjunto filtrado en bloques fijos (`pageSize = 10`),
+ *      minimizando la manipulación del árbol de nodos DOM a solo los elementos visibles en el viewport.
+ * 
+ * 4. Transición de Estado Vía History State (`navigate(..., { state: { sensor } })`):
+ *    - Al activar el disparador "Ver Gráfico", transfiere la entidad completa ya presente en memoria
+ *      hacia el enrutador de `/sensors/:id`, permitiendo la hidratación inmediata en la vista receptora.
+ * 
+ * 5. Agregación Paralela de Métricas Ejecutivas (KPIs):
+ *    - Calcula las métricas globales consolidadas (sensores sin transmitir, fuera de rango, operativos)
+ *      mediante consultas concurrentes independientes, desacoplando el resumen gerencial de la tabla de telemetría.
+ */
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
   WifiOff,
   CheckCircle2,
-  ArrowRight,
   Radio,
   ChevronLeft,
   ChevronRight,
   Search,
   X,
+  Activity,
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+
+  /**
+   * useRef para la caché en memoria:
+   * A diferencia de useState, mutar `cacheRef.current` no dispara re-renderizados,
+   * permitiendo persistir datos entre cambios de estado sin re-descargar de la API.
+   */
   const cacheRef = useRef(new Map())
 
-  // Métricas del sistema calculadas combinando rutas
+  // Métricas consolidadas del sistema (tarjetas KPI superiores)
   const [metrics, setMetrics] = useState({
     total: 0,
     offlineCount: 0,
@@ -25,7 +62,7 @@ export default function DashboardPage() {
     normalCount: 0,
   })
 
-  // Lista de sensores y filtro
+  // Lista de sensores y estados de control
   const [sensors, setSensors] = useState([])
   const [loadingSensors, setLoadingSensors] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'out_of_range' | 'no_data' | 'ok'
@@ -33,7 +70,11 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1)
   const [pageSize] = useState(10)
 
-  // Cargar métricas ejecutivas
+  /**
+   * Carga de métricas ejecutivas:
+   * Invoca `sensorService.getDashboardMetrics()` que consulta simultáneamente
+   * los totales por estado.
+   */
   const loadMetrics = useCallback(async () => {
     try {
       const data = await sensorService.getDashboardMetrics()
@@ -43,7 +84,12 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Cargar totalidad de sensores según estado con caché en memoria para respuesta instantánea
+  /**
+   * Carga de sensores con estrategia Cache-First:
+   * 1. Verifica si la clave `statusFilter` ya existe en la caché local.
+   * 2. Si existe, muestra los datos cacheados de inmediato.
+   * 3. En segundo plano consulta la API y actualiza la caché y el estado.
+   */
   const loadSensors = useCallback(async () => {
     const cacheKey = statusFilter
 
@@ -71,15 +117,21 @@ export default function DashboardPage() {
     }
   }, [statusFilter])
 
+  // Disparar carga de métricas al montar el componente
   useEffect(() => {
     loadMetrics()
   }, [loadMetrics])
 
+  // Recargar sensores al cambiar el filtro de estado
   useEffect(() => {
     loadSensors()
   }, [loadSensors])
 
-  // Filtrado reactivo global multi-criterio (nombre, ID, centro, ubicación y estado)
+  /**
+   * Filtrado reactivo multi-criterio:
+   * Memoizado para evitar recalcular en renders no relacionados.
+   * Permite buscar por palabras separadas ("sensor 12 jaula") en cualquier orden.
+   */
   const filteredSensors = useMemo(() => {
     if (!searchTerm.trim()) return sensors
     const term = searchTerm.toLowerCase().trim()
@@ -104,7 +156,9 @@ export default function DashboardPage() {
 
   const totalPages = Math.max(1, Math.ceil(filteredSensors.length / pageSize))
 
-  // Paginación sobre el conjunto filtrado
+  /**
+   * Segmentación de sensores para la página actual (Paginación en cliente)
+   */
   const displayedSensors = useMemo(() => {
     const startIndex = (page - 1) * pageSize
     return filteredSensors.slice(startIndex, startIndex + pageSize)
@@ -117,11 +171,6 @@ export default function DashboardPage() {
 
   const handleClearSearch = () => {
     setSearchTerm('')
-    setPage(1)
-  }
-
-  const handleCardClick = (targetStatus) => {
-    setStatusFilter(targetStatus)
     setPage(1)
   }
 
@@ -139,7 +188,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Tarjetas de Resumen */}
+      {/* Tarjetas Indicadoras de Números (Cuadros de métricas no accionables) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
         {[
           {
@@ -148,7 +197,6 @@ export default function DashboardPage() {
             count: metrics.offlineCount,
             icon: WifiOff,
             subtext: 'Inactivos (>90 min)',
-            activeClass: 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20',
             textColor: 'text-rose-600 dark:text-rose-400',
             iconBox: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400',
           },
@@ -158,7 +206,6 @@ export default function DashboardPage() {
             count: metrics.outOfRangeCount,
             icon: AlertTriangle,
             subtext: 'Oxígeno anómalo',
-            activeClass: 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20',
             textColor: 'text-amber-600 dark:text-amber-400',
             iconBox: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
           },
@@ -168,7 +215,6 @@ export default function DashboardPage() {
             count: metrics.normalCount,
             icon: CheckCircle2,
             subtext: 'Transmitiendo normal',
-            activeClass: 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20',
             textColor: 'text-emerald-600 dark:text-emerald-400',
             iconBox: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
           },
@@ -177,43 +223,35 @@ export default function DashboardPage() {
             label: 'Total Sensores',
             count: metrics.total,
             icon: Radio,
-            subtext: 'Ver todos los sensores',
-            activeClass: 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20',
+            subtext: 'Registrados en sistema',
             textColor: 'text-slate-900 dark:text-white',
             iconBox: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
           },
         ].map((card) => {
-          const isSelected = statusFilter === card.id
           const Icon = card.icon
 
           return (
-            <button
+            <div
               key={card.id}
-              type="button"
-              onClick={() => handleCardClick(card.id)}
-              className={`text-left p-5 rounded-2xl border transition-colors duration-150 cursor-pointer relative overflow-hidden group ${
-                isSelected
-                  ? card.activeClass
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
-              }`}
+              className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs relative overflow-hidden"
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <p className={`text-xs font-semibold uppercase tracking-wider ${isSelected ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                     {card.label}
                   </p>
-                  <h3 className={`text-3xl font-extrabold mt-1.5 ${isSelected ? 'text-white' : card.textColor}`}>
+                  <h3 className={`text-3xl font-extrabold mt-1.5 ${card.textColor}`}>
                     {card.count}
                   </h3>
                 </div>
-                <div className={`p-2.5 rounded-xl ${isSelected ? 'bg-white/20 text-white' : card.iconBox}`}>
+                <div className={`p-2.5 rounded-xl ${card.iconBox}`}>
                   <Icon className="w-5 h-5" />
                 </div>
               </div>
-              <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${isSelected ? 'text-white/90' : card.textColor}`}>
+              <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${card.textColor}`}>
                 {card.subtext}
               </p>
-            </button>
+            </div>
           )
         })}
       </div>
@@ -385,11 +423,11 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-end">
                         <button
                           type="button"
-                          onClick={() => navigate(`/sensors/${sensor.id}`)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
+                          onClick={() => navigate(`/sensors/${sensor.id}`, { state: { sensor } })}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
                         >
+                          <Activity className="w-3.5 h-3.5" />
                           <span>Ver Gráfico</span>
-                          <ArrowRight className="w-3 h-3" />
                         </button>
                       </div>
                     </td>
@@ -450,7 +488,6 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-
     </div>
   )
 }

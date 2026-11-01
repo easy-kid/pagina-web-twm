@@ -1,9 +1,27 @@
-// src/api/client.js - Cliente HTTP 100% nativo basado en fetch del navegador
+/**
+ * =============================================================================
+ * CLIENTE HTTP DE LA APLICACIÓN (client.js)
+ * =============================================================================
+ * Wrapper sobre la API estándar `fetch()` del navegador que centraliza:
+ * 
+ * 1. Base URL dinámica: Se obtiene de `import.meta.env.VITE_API_URL` con fallback.
+ * 2. Inyección de Autenticación: Inserta automáticamente el header `Authorization: Bearer <token>`
+ *    obtenido desde `localStorage` en cada petición.
+ * 3. Serialización Automática: Convierte cuerpos de objetos JSON a texto plano y fija `Content-Type`.
+ * 4. Interceptor 401 Unauthorized: Si el servidor rechaza una solicitud por expiración del token,
+ *    elimina las credenciales caducadas de `localStorage` y redirige al usuario hacia `/login`.
+ * 5. Normalización de Errores: Envuelve fallos HTTP en la clase `ApiError` para acceso estándar a `status` y `data`.
+ */
+
 const API_URL = import.meta.env.VITE_API_URL || 'https://ulamonitors-uat-back.grye.org'
 
+// Bandera para evitar bucles o múltiples redirecciones simultáneas al login
 let isRedirecting = false
 
-// Error personalizado para mantener compatibilidad con lecturas de status y detail
+/**
+ * Clase de Error estándar para peticiones de API.
+ * Permite acceder a `err.response.status` y `err.response.data`.
+ */
 export class ApiError extends Error {
   constructor(message, status, data) {
     super(message)
@@ -15,6 +33,9 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Construye la URL final concatenando la base, el endpoint y los parámetros de búsqueda (query params).
+ */
 const buildUrl = (endpoint, params) => {
   let url = `${API_URL}${endpoint}`
   if (params && typeof params === 'object') {
@@ -32,6 +53,9 @@ const buildUrl = (endpoint, params) => {
   return url
 }
 
+/**
+ * Función central de ejecución HTTP
+ */
 const requestWithFetch = async (endpoint, method = 'GET', body = null, options = {}) => {
   const url = buildUrl(endpoint, options.params)
   const token = localStorage.getItem('access_token') || localStorage.getItem('token')
@@ -40,14 +64,14 @@ const requestWithFetch = async (endpoint, method = 'GET', body = null, options =
     ...options.headers,
   }
 
-  // Inyección automática del token de autorización
+  // 1. Inyección automática del Bearer Token si el usuario ha iniciado sesión
   if (token && !headers.Authorization) {
     headers.Authorization = `Bearer ${token}`
   }
 
   let formattedBody = body
 
-  // Si el cuerpo es un objeto plano, serializamos a JSON
+  // 2. Serialización a JSON si el body no es FormData ni URLSearchParams
   if (body && !(body instanceof URLSearchParams) && !(body instanceof FormData) && typeof body === 'object') {
     if (!headers['Content-Type']) {
       headers['Content-Type'] = 'application/json'
@@ -63,7 +87,7 @@ const requestWithFetch = async (endpoint, method = 'GET', body = null, options =
       body: method === 'GET' ? undefined : formattedBody,
     })
 
-    // Manejo de expiración de sesión (401 Unauthorized)
+    // 3. Manejo de expiración de sesión (401 Unauthorized)
     const isLoginEndpoint = endpoint.includes('/token')
     const isOnLoginPage = typeof window !== 'undefined' && window.location.pathname === '/login'
 
@@ -77,6 +101,7 @@ const requestWithFetch = async (endpoint, method = 'GET', body = null, options =
       }
     }
 
+    // 4. Verificación de respuesta exitosa (status 200-299)
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       const errorMessage =
@@ -96,12 +121,14 @@ const requestWithFetch = async (endpoint, method = 'GET', body = null, options =
     if (error instanceof ApiError) {
       throw error
     }
-    // Errores de red o de conexión
+    // Errores de red o de conexión física
     throw new ApiError(error.message || 'Error de conexión', 0, { detail: error.message })
   }
 }
 
-// Wrapper cliente con métodos semánticos (get, post, patch, delete)
+/**
+ * Objeto exportado con métodos semánticos correspondientes a los verbos HTTP
+ */
 const client = {
   get: (endpoint, options = {}) => requestWithFetch(endpoint, 'GET', null, options),
   post: (endpoint, body = null, options = {}) => requestWithFetch(endpoint, 'POST', body, options),
