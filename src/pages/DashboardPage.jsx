@@ -18,6 +18,7 @@ import {
   Activity,
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
+import { siteService } from '../services/siteService'
 
 /**
  * DashboardPage:
@@ -45,6 +46,7 @@ export default function DashboardPage() {
 
   // Lista de sensores y estados de control
   const [sensors, setSensors] = useState([])
+  const [siteNames, setSiteNames] = useState({})
   const [loadingSensors, setLoadingSensors] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'out_of_range' | 'no_data' | 'ok'
   const [searchTerm, setSearchTerm] = useState('')
@@ -140,6 +142,37 @@ export default function DashboardPage() {
   }, [statusFilter, loadSensors])
 
   /**
+   * Carga del catálogo de centros de cultivo:
+   * Permite resolver nombres oficiales de sitios para búsqueda y visualización.
+   */
+  useEffect(() => {
+    let isMounted = true
+
+    const loadSiteCatalog = async () => {
+      try {
+        const sites = await siteService.getSites()
+        if (Array.isArray(sites) && isMounted) {
+          const mapping = {}
+          sites.forEach((site) => {
+            const sId = site.id ?? site._id
+            if (sId != null && site.name) {
+              mapping[String(sId)] = site.name
+            }
+          })
+          setSiteNames(mapping)
+        }
+      } catch (err) {
+        console.warn('[DashboardPage] Error al recuperar centros de cultivo:', err)
+      }
+    }
+
+    loadSiteCatalog()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  /**
    * handleClearSearch:
    * Limpia el término de búsqueda activo y regresa el paginado al inicio.
    */
@@ -150,7 +183,7 @@ export default function DashboardPage() {
 
   /**
    * filteredSensors (Memoización de Filtrado y Priorización de Severidad):
-   * 1. Filtra reactivamente por término de búsqueda (nombre, ID, centro, posición, estado).
+   * 1. Filtra reactivamente de forma exclusiva por sensor (nombre o ID) o nombre de centro.
    * 2. Aplica ordenamiento estándar por criticidad operacional:
    *    - 1º Severidad Alta: Sin Transmitir (`no_data`, dispositivos desconectados).
    *    - 2º Severidad Media: Fuera de Rango (`out_of_range`, oxígeno anómalo).
@@ -163,19 +196,28 @@ export default function DashboardPage() {
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim()
       result = result.filter((sensor) => {
-        const nameMatch = (sensor.name || '').toLowerCase().includes(term)
-        const idMatch = String(sensor.id || '').includes(term)
-        const siteMatch = String(sensor.site_id || '').includes(term)
-        const positionMatch = (sensor.position || '').toLowerCase().includes(term)
-        const statusLabel =
-          sensor.status === 'out_of_range'
-            ? 'fuera de rango anomalo'
-            : sensor.status === 'no_data'
-              ? 'sin transmitir inactivo offline'
-              : 'operativo normal ok'
-        const statusMatch = statusLabel.includes(term)
+        // Criterio 1: Búsqueda exclusiva por sensor (nombre o ID del sensor)
+        const sensorName = (sensor.name || sensor.sensor_name || `Sensor #${sensor.id}`).toLowerCase()
+        const sensorId = String(sensor.id ?? '')
+        const rawSensor = `${sensorName} sensor ${sensorId} #${sensorId}`.toLowerCase()
+        const sensorMatch =
+          rawSensor.includes(term) ||
+          sensorId === term ||
+          `#${sensorId}` === term
 
-        return nameMatch || idMatch || siteMatch || positionMatch || statusMatch
+        // Criterio 2: Búsqueda exclusiva por nombre de centro
+        const resolvedSiteName = (
+          siteNames[String(sensor.site_id)] ||
+          sensor.site_name ||
+          sensor.site?.name ||
+          (sensor.site_id != null ? `Centro #${sensor.site_id}` : '')
+        ).toLowerCase()
+        const rawSite = `${resolvedSiteName} centro ${sensor.site_id ?? ''} #${sensor.site_id ?? ''}`.toLowerCase()
+        const siteMatch =
+          rawSite.includes(term) ||
+          (sensor.site_id != null && String(sensor.site_id) === term)
+
+        return sensorMatch || siteMatch
       })
     }
 
@@ -189,7 +231,7 @@ export default function DashboardPage() {
       }
       return (Number(a.id) || 0) - (Number(b.id) || 0)
     })
-  }, [sensors, searchTerm])
+  }, [sensors, searchTerm, siteNames])
 
   /**
    * totalPages (Memoización):
@@ -237,8 +279,8 @@ export default function DashboardPage() {
         {/* KPI: Sin Transmitir */}
         <div
           className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${statusFilter === 'no_data'
-              ? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 shadow-sm ring-2 ring-rose-500/20'
-              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
+            ? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 shadow-sm ring-2 ring-rose-500/20'
+            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
             }`}
         >
           <div className="flex items-center justify-between">
@@ -262,8 +304,8 @@ export default function DashboardPage() {
         {/* KPI: Fuera de Rango */}
         <div
           className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${statusFilter === 'out_of_range'
-              ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 shadow-sm ring-2 ring-amber-500/20'
-              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
+            ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 shadow-sm ring-2 ring-amber-500/20'
+            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
             }`}
         >
           <div className="flex items-center justify-between">
@@ -287,8 +329,8 @@ export default function DashboardPage() {
         {/* KPI: Operativos */}
         <div
           className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${statusFilter === 'ok'
-              ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 shadow-sm ring-2 ring-emerald-500/20'
-              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
+            ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 shadow-sm ring-2 ring-emerald-500/20'
+            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
             }`}
         >
           <div className="flex items-center justify-between">
@@ -312,8 +354,8 @@ export default function DashboardPage() {
         {/* KPI: Total Sensores */}
         <div
           className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${statusFilter === 'all'
-              ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800 shadow-sm ring-2 ring-blue-500/20'
-              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
+            ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800 shadow-sm ring-2 ring-blue-500/20'
+            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
             }`}
         >
           <div className="flex items-center justify-between">
@@ -356,7 +398,7 @@ export default function DashboardPage() {
               </div>
               <input
                 type="text"
-                placeholder="Buscar por sensor, ID o centro..."
+                placeholder="Buscar por sensor o nombre de centro..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value)
@@ -438,7 +480,7 @@ export default function DashboardPage() {
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
                       <span className="font-medium text-slate-700 dark:text-slate-300">
-                        Centro #{sensor.site_id}
+                        {siteNames[String(sensor.site_id)] || (sensor.site_id != null ? `Centro #${sensor.site_id}` : 'Sin Centro')}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
