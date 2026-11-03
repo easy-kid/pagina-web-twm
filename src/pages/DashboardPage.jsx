@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowRight,
   Radio,
+  Building,
   ChevronLeft,
   ChevronRight,
   Search,
@@ -14,6 +15,7 @@ import {
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
 import { getSiteId, siteService } from '../services/siteService'
+import { interventionService } from '../services/interventionService'
 import NotFoundPage from '../components/NotFoundPage'
 import { isNotFoundError } from '../api/client'
 
@@ -45,6 +47,42 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1)
   const [totalSensorsCount, setTotalSensorsCount] = useState(0)
   const [pageSize] = useState(10)
+  const [interventions, setInterventions] = useState([])
+  const [interventionsLoading, setInterventionsLoading] = useState(true)
+  const [interventionsError, setInterventionsError] = useState('')
+
+  useEffect(() => {
+    let active = true
+
+    const loadInterventionsData = async () => {
+      setInterventionsLoading(true)
+      setInterventionsError('')
+
+      try {
+        const interventionsResult = await interventionService.getInterventions()
+        if (!active) return
+
+        const recentInterventions = [...interventionsResult]
+          .sort((a, b) => {
+            const dateA = Date.parse(a.createdAt || '') || 0
+            const dateB = Date.parse(b.createdAt || '') || 0
+            return dateB - dateA
+          })
+          .slice(0, 4)
+        setInterventions(recentInterventions)
+      } catch (error) {
+        console.error('Error al cargar las intervenciones recientes:', error)
+        if (active) setInterventionsError('No fue posible cargar las intervenciones.')
+      } finally {
+        if (active) setInterventionsLoading(false)
+      }
+    }
+
+    loadInterventionsData()
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -136,6 +174,7 @@ export default function DashboardPage() {
   }, [loadSensors])
 
   const totalPages = Math.max(1, Math.ceil(totalSensorsCount / pageSize))
+  const openInterventionsCount = interventions.filter((item) => item.status === 'open').length
 
   // Búsqueda inteligente: filtra por nombre de sensor, nombre de centro, posición, profundidad o estado
   const displayedSensors = sensors.filter((s) => {
@@ -181,23 +220,56 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Panel de Control Operacional
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Supervisión en tiempo real de los sensores de oxígeno disuelto en centros de cultivo
-          </p>
-          {siteNamesError && (
-            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300" role="status">
-              No se pudieron cargar los nombres de los centros; se muestran sus IDs.
+    <div className="space-y-7">
+      <section className="relative isolate overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-6 py-7 text-white shadow-xl shadow-slate-900/10 sm:px-8 sm:py-9">
+        <div className="pointer-events-none absolute -right-12 -top-28 h-80 w-80 rounded-full border border-white/10" />
+        <div className="pointer-events-none absolute -right-2 -top-16 h-60 w-60 rounded-full border border-white/10" />
+        <div className="pointer-events-none absolute -bottom-36 right-1/4 h-72 w-72 rounded-full bg-teal-400/10 blur-3xl" />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-teal-300" />
+              ULA Monitors · Operación
             </p>
-          )}
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
+              El estado del agua,<br className="hidden sm:block" /> de un vistazo.
+            </h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
+              Monitoreo de oxígeno disuelto, sensores y actividad en tus centros de cultivo.
+            </p>
+            {siteNamesError && (
+              <p className="mt-3 text-xs text-amber-200" role="status">
+                No se pudieron cargar los nombres de los centros; se muestran sus IDs.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/sites')}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/15"
+            >
+              <Building className="h-4 w-4" />
+              Centros
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
-      </div>
+        <div className="relative mt-8 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Centros monitoreados</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{sitesList.length}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Sensores activos</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{metrics.normalCount}</p>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Alertas por atender</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{metrics.offlineCount + metrics.outOfRangeCount}</p>
+          </div>
+        </div>
+      </section>
 
       {/* Tarjetas de Resumen */}
       {metricsError && (
@@ -285,6 +357,60 @@ export default function DashboardPage() {
           )
         })}
       </div>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)]">
+        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700 dark:text-blue-300">Seguimiento</p>
+              <h2 className="mt-1 text-base font-semibold text-slate-900 dark:text-white">Intervenciones recientes</h2>
+            </div>
+            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+              {openInterventionsCount} abiertas
+            </span>
+          </div>
+          {interventionsError ? (
+            <div className="px-5 py-10 text-center text-sm text-rose-600 dark:text-rose-300" role="alert">
+              <p>{interventionsError}</p>
+            </div>
+          ) : interventionsLoading ? (
+            <p className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400" role="status">Cargando intervenciones...</p>
+          ) : interventions.length === 0 ? (
+            <div className="px-5 py-10 text-center">
+              <ClipboardCheck className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-600" />
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">No hay intervenciones registradas.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {interventions.map((intervention, index) => (
+                <li key={intervention.id ?? `${intervention.createdAt}-${index}`} className="px-5 py-3.5">
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${intervention.status === 'open' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">
+                        {intervention.reason || `Centro ${intervention.siteId}`}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Centro {intervention.siteId || '—'}{intervention.sensorId ? ` · Sensor ${intervention.sensorId}` : ''}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{formatChileDateTime(intervention.createdAt)}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${intervention.status === 'open' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'}`}>
+                      {intervention.status === 'open' ? 'Abierta' : 'Cerrada'}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="border-t border-slate-100 px-5 py-3 dark:border-slate-800">
+            <button type="button" onClick={() => navigate('/interventions')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200">
+              Ver todas las intervenciones
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </article>
+      </section>
 
       {/* Tabla Interactiva de Sensores */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden transition-colors">

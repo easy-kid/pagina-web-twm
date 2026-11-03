@@ -13,6 +13,11 @@ const statusLabels = {
   unknown: 'Desconocido',
 }
 
+const interventionStatusLabels = {
+  open: 'Abierta',
+  closed: 'Cerrada',
+}
+
 const statusPriority = {
   no_data: 0,
   out_of_range: 1,
@@ -48,13 +53,74 @@ const suggestionsByStatus = {
   unknown: 'Se debe inspeccionar el sensor y confirmar su estado y comunicación con el sistema.',
 }
 
-const formatDateTime = (value) =>
+const formatDateTime = (value) => {
+  const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
+  if (!match) return value ? String(value) : 'Fecha no disponible'
+  const [, year, month, day, hour, minute] = match
+
+  return `${day}/${month}/${year} ${hour}:${minute}`
+}
+
+const getChileWallTime = (value) => {
+  const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/)
+  if (!match) return Number.NaN
+  const [, year, month, day, hour, minute, second = '0'] = match
+  return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second))
+}
+
+const getCurrentChileWallTime = () => {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'America/Santiago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+
+  return Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second),
+  )
+}
+
+const formatCurrentChileDateTime = () =>
   new Intl.DateTimeFormat('es-CL', {
     dateStyle: 'medium',
     timeStyle: 'short',
-  }).format(new Date(value))
+    timeZone: 'America/Santiago',
+  }).format(new Date())
 
 const getStatusLabel = (status) => statusLabels[status] || statusLabels.unknown
+
+const enrichInterventions = (interventions, sites) => {
+  const sitesById = new Map(sites.map((site) => [String(site.id), site]))
+
+  return interventions.map((intervention) => {
+    const site = sitesById.get(String(intervention.siteId))
+    const sensor = site?.sensors.find(
+      (item) => String(item.id ?? item._id) === String(intervention.sensorId),
+    )
+
+    return {
+      ...intervention,
+      siteName: intervention.siteName || site?.name || `Centro ${intervention.siteId}`,
+      zone: intervention.zone || getSiteArea(site) || 'Sin zona',
+      sensorName: intervention.sensorName || sensor?.name || '',
+      sensorStatus: sensor?.status || 'unknown',
+      suggestedAction:
+        intervention.suggestedAction || intervention.reason || intervention.message || '',
+      message: intervention.message || '',
+    }
+  })
+}
 
 const getCenterStatus = (sensors = []) => {
   if (sensors.some((sensor) => sensor.status === 'no_data')) return 'no_data'
@@ -70,6 +136,7 @@ export default function InterventionsPage() {
   const [sites, setSites] = useState([])
   const [interventions, setInterventions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
@@ -78,12 +145,9 @@ export default function InterventionsPage() {
   )
   const [siteId, setSiteId] = useState(String(initialSelection.siteId ?? ''))
   const [sensorId, setSensorId] = useState(String(initialSelection.sensorId ?? ''))
-  const [senderName, setSenderName] = useState('')
-  const [senderRole, setSenderRole] = useState('')
   const [suggestedAction, setSuggestedAction] = useState('')
   const [message, setMessage] = useState('')
   const [savedNotice, setSavedNotice] = useState('')
-  const [editingId, setEditingId] = useState(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [zoneFilter, setZoneFilter] = useState('all')
   const [timeFilter, setTimeFilter] = useState('all')
@@ -92,7 +156,7 @@ export default function InterventionsPage() {
   const [formOpen, setFormOpen] = useState(Boolean(initialSelection.targetType))
 
   useEffect(() => {
-    setCurrentTime(Date.now())
+    setCurrentTime(getCurrentChileWallTime())
   }, [])
 
   useEffect(() => {
@@ -120,11 +184,9 @@ export default function InterventionsPage() {
 
     const loadData = async () => {
       try {
-        // TODO (Backend Integration): Al conectar el backend real, interventionService.getInterventions()
-        // debe ser invocado asíncronamente contra GET /interventions
         const [siteList, savedInterventions] = await Promise.all([
           siteService.getSites(),
-          Promise.resolve(interventionService.getInterventions()),
+          interventionService.getInterventions(),
         ])
         const sitesWithSensors = await Promise.all(
           siteList.map(async (site) => {
@@ -136,14 +198,14 @@ export default function InterventionsPage() {
 
         if (active) {
           setSites(sitesWithSensors)
-          setInterventions(savedInterventions)
+          setInterventions(enrichInterventions(savedInterventions, sitesWithSensors))
           setSiteId((current) => current || String(getSiteId(sitesWithSensors[0]) ?? ''))
         }
       } catch (error) {
         console.error('Error al cargar los datos de intervenciones:', error)
         if (active) {
           if (isNotFoundError(error)) setNotFound(true)
-          else setLoadError('No fue posible cargar centros, sensores o intervenciones guardadas. Intenta nuevamente.')
+          else setLoadError('No fue posible cargar centros, sensores o intervenciones. Intenta nuevamente.')
         }
       } finally {
         if (active) setLoading(false)
@@ -177,13 +239,10 @@ export default function InterventionsPage() {
   }, [sensors, targetStatus, targetType])
 
   useEffect(() => {
-    if (!editingId) setSuggestedAction(statusSuggestion)
-  }, [editingId, statusSuggestion])
+    setSuggestedAction(statusSuggestion)
+  }, [statusSuggestion])
 
-  const targetLabel = targetType === 'sensor'
-    ? selectedSensor?.name || `Sensor ${sensorId}`
-    : selectedSite?.name || 'Centro de cultivo'
-  const nowText = formatDateTime(new Date().toISOString())
+  const nowText = formatCurrentChileDateTime()
   const siteAreas = useMemo(
     () => new Map(sites.map((site) => [String(site.id), getSiteArea(site) || 'Sin zona'])),
     [sites],
@@ -208,11 +267,11 @@ export default function InterventionsPage() {
       month: 30 * 24 * 60 * 60 * 1000,
     }
     const filtered = interventions.filter((intervention) => {
-      const status = statusLabels[intervention.sensorStatus] ? intervention.sensorStatus : 'unknown'
+      const status = intervention.status || 'open'
       const zone = intervention.zone || siteAreas.get(String(intervention.siteId)) || 'Sin zona'
       const matchesStatus = statusFilter === 'all' || status === statusFilter
       const matchesZone = zoneFilter === 'all' || zone === zoneFilter
-      const age = currentTime - new Date(intervention.createdAt).getTime()
+      const age = currentTime - getChileWallTime(intervention.createdAt)
       const matchesTime = timeFilter === 'all' ||
         (currentTime > 0 && Number.isFinite(age) && age >= 0 && age <= timeFilterDurations[timeFilter])
       const searchContent = [
@@ -232,7 +291,7 @@ export default function InterventionsPage() {
       const leftStatus = statusPriority[left.sensorStatus] ?? statusPriority.unknown
       const rightStatus = statusPriority[right.sensorStatus] ?? statusPriority.unknown
       return leftStatus - rightStatus ||
-        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+        getChileWallTime(right.createdAt) - getChileWallTime(left.createdAt)
     })
   }, [currentTime, interventions, searchTerm, siteAreas, statusFilter, timeFilter, zoneFilter])
 
@@ -248,51 +307,7 @@ export default function InterventionsPage() {
     setSensorId('')
   }
 
-  const startEditing = (intervention) => {
-    if (!window.confirm(`¿Quieres editar la intervención para ${intervention.siteName}?`)) return
-
-    setFormOpen(true)
-    setEditingId(intervention.id)
-    setTargetType(intervention.targetType)
-    setSiteId(intervention.siteId)
-    setSensorId(intervention.sensorId || '')
-    setSenderName(intervention.senderName)
-    setSenderRole(intervention.senderRole)
-    setSuggestedAction(intervention.suggestedAction)
-    setMessage(intervention.message)
-    setSaveError('')
-    setSavedNotice('')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  const cancelEditing = () => {
-    setFormOpen(false)
-    setEditingId(null)
-    setSenderName('')
-    setSenderRole('')
-    setMessage('')
-    setSaveError('')
-    setSavedNotice('')
-    setTargetType('site')
-    setSensorId('')
-  }
-
-  // TODO (Backend Integration): La API FastAPI en https://ulamonitors-uat-back.grye.org/docs
-  // no expone DELETE /interventions. Este flujo debe reemplazarse por la acción de "Cerrar / Resolver"
-  // mediante PATCH /interventions/{id} con outcome ('back_online'|'replaced'|'reconfigured'|'no_fault_found').
-  const handleDelete = (intervention) => {
-    if (!window.confirm(`¿Estás seguro de eliminar la intervención para ${intervention.siteName}? Esta acción no se puede deshacer.`)) return
-
-    try {
-      setInterventions(interventionService.deleteIntervention(intervention.id))
-      if (editingId === intervention.id) cancelEditing()
-    } catch (error) {
-      console.error('Error al eliminar la intervención local:', error)
-      setSaveError('No se pudo eliminar la intervención. Intenta nuevamente.')
-    }
-  }
-
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
     setSaveError('')
     setSavedNotice('')
@@ -302,55 +317,32 @@ export default function InterventionsPage() {
       return
     }
 
+    setSaving(true)
     try {
-      // TODO (Backend Integration): Para POST /interventions el esquema requerido es:
-      // {
-      //   site_id: Number(selectedSite.id),
-      //   sensor_id: targetType === 'sensor' ? Number(selectedSensor.id ?? selectedSensor._id) : null,
-      //   reason: `${suggestedAction ? suggestedAction + ' - ' : ''}${message}`.trim()
-      // }
-      // Nota: 'senderName' y 'senderRole' no se envían; el backend asigna 'opened_by' desde el token JWT.
-      const interventionData = {
-        senderName: senderName.trim(),
-        senderRole: senderRole.trim(),
-        targetType,
-        siteId: String(selectedSite.id),
-        siteName: selectedSite.name || `Centro ${selectedSite.id}`,
-        zone: getSiteArea(selectedSite) || 'Sin zona',
-        sensorId: targetType === 'sensor' ? String(selectedSensor.id ?? selectedSensor._id) : null,
-        sensorName: targetType === 'sensor' ? targetLabel : null,
-        sensorStatus: targetStatus,
-        suggestedAction: suggestedAction.trim(),
-        message: message.trim(),
-        status: 'pending',
-      }
-
-      if (editingId) {
-        if (!window.confirm('¿Confirmas guardar los cambios de esta intervención?')) return
-        const updated = interventionService.updateIntervention(editingId, interventionData)
-        setInterventions((current) =>
-          current.map((intervention) => intervention.id === editingId ? updated : intervention),
-        )
-        setCurrentTime(Date.now())
-        setEditingId(null)
-        setSenderName('')
-        setSenderRole('')
-        setSuggestedAction('')
-        setMessage('')
-        setSavedNotice('Cambios de la intervención guardados.')
-        setFormOpen(false)
-        return
-      }
-
-      const saved = interventionService.createIntervention(interventionData)
-      setInterventions((current) => [saved, ...current])
-      setCurrentTime(Date.now())
+      const reason = [suggestedAction.trim(), message.trim()].filter(Boolean).join('\n\n')
+      await interventionService.createIntervention({
+        siteId: selectedSite.id,
+        sensorId: targetType === 'sensor' ? selectedSensor.id ?? selectedSensor._id : null,
+        reason,
+      })
+      setCurrentTime(getCurrentChileWallTime())
+      setSuggestedAction('')
       setMessage('')
-      setSavedNotice('Intervención guardada.')
+      setSaveError('')
+      setSavedNotice('Intervención abierta.')
       setFormOpen(false)
+      try {
+        const latest = await interventionService.getInterventions()
+        setInterventions(enrichInterventions(latest, sites))
+      } catch (error) {
+        console.error('Error al actualizar el listado de intervenciones:', error)
+        setSavedNotice('La intervención se abrió, pero no se pudo actualizar el listado.')
+      }
     } catch (error) {
-      console.error('Error al guardar la intervención local:', error)
-      setSaveError('No se pudo guardar la intervención. Revisa el espacio disponible e inténtalo nuevamente.')
+      console.error('Error al abrir la intervención:', error)
+      setSaveError('No se pudo abrir la intervención. Intenta nuevamente.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -378,6 +370,11 @@ export default function InterventionsPage() {
         </div>
       ) : (
         <div>
+          {savedNotice && (
+            <p className="mb-4 text-sm font-medium text-emerald-700 dark:text-emerald-300" role="status">
+              {savedNotice}
+            </p>
+          )}
           <dialog
             ref={formDialogRef}
             onClose={() => setFormOpen(false)}
@@ -392,7 +389,7 @@ export default function InterventionsPage() {
               <div>
                 <h2 className="font-bold text-slate-900 dark:text-white">
                   <span id="intervention-form-title">
-                  {editingId ? 'Editar intervención' : 'Nueva intervención'}
+                  Nueva intervención
                   </span>
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">La fecha y hora se registran automáticamente.</p>
@@ -487,17 +484,6 @@ export default function InterventionsPage() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-                Nombre de quien solicita
-                <input required value={senderName} onChange={(event) => setSenderName(event.target.value)} maxLength={100} autoComplete="name" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
-              </label>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-                Cargo
-                <input required value={senderRole} onChange={(event) => setSenderRole(event.target.value)} maxLength={100} placeholder="Ej.: Operador de monitoreo" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
-              </label>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Fecha y hora</p>
                 <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{nowText}</p>
@@ -522,19 +508,9 @@ export default function InterventionsPage() {
             </label>
 
             {saveError && <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">{saveError}</p>}
-            {savedNotice && <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300" role="status">{savedNotice}</p>}
             <div className="flex flex-col-reverse gap-3 sm:flex-row">
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={cancelEditing}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  Cancelar edición
-                </button>
-              )}
-              <button type="submit" className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
-                {editingId ? 'Guardar cambios' : 'Guardar intervención'}
+              <button type="submit" disabled={saving} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:ring-offset-slate-900">
+                {saving ? 'Abriendo...' : 'Abrir intervención'}
               </button>
             </div>
           </form>
@@ -552,9 +528,7 @@ export default function InterventionsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setEditingId(null)
-                    setSenderName('')
-                    setSenderRole('')
+                    setSuggestedAction(statusSuggestion)
                     setMessage('')
                     setSaveError('')
                     setSavedNotice('')
@@ -603,9 +577,8 @@ export default function InterventionsPage() {
                   className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-normal text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 >
                   <option value="all">Todos los estados</option>
-                  <option value="no_data">Desconectado</option>
-                  <option value="out_of_range">Fuera de rango</option>
-                  <option value="ok">En línea</option>
+                  <option value="open">Abiertas</option>
+                  <option value="closed">Cerradas</option>
                 </select>
               </label>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
@@ -652,21 +625,13 @@ export default function InterventionsPage() {
                         {intervention.sensorName && <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{intervention.sensorName}</p>}
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => startEditing(intervention)}
-                          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(intervention)}
-                          className="rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 dark:border-rose-900/60 dark:text-rose-300 dark:hover:bg-rose-950/40"
-                        >
-                          Eliminar
-                        </button>
-                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">Pendiente</span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          intervention.status === 'closed'
+                            ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            : 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                        }`}>
+                          {interventionStatusLabels[intervention.status] || 'Abierta'}
+                        </span>
                       </div>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -680,9 +645,11 @@ export default function InterventionsPage() {
                     </div>
                     <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">{intervention.suggestedAction}</p>
                     {intervention.message && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{intervention.message}</p>}
-                    <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                      Solicitó {intervention.senderName} · {intervention.senderRole}
-                    </p>
+                    {intervention.senderName && (
+                      <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                        Solicitó {intervention.senderName}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>

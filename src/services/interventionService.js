@@ -1,131 +1,84 @@
-/**
- * src/services/interventionService.js
- *
- * NOTA DE ARQUITECTURA / BACKEND:
- * La API oficial en https://ulamonitors-uat-back.grye.org/docs expone los siguientes
- * endpoints REST bajo OAuth2 Bearer:
- *
- * 1. GET /interventions
- *    - Query params: site_id (int), sensor_id (int), status ('open' | 'closed'), page (int), page_size (int)
- *    - Requiere scope: "read"
- *    - Retorna listado de intervenciones (más recientes primero; ?status=open para pendientes)
- *
- * 2. POST /interventions
- *    - Body: { site_id: int, sensor_id?: int | null, reason: string, outcome?: string, outcome_notes?: string }
- *    - Requiere scope: "read"
- *    - El autor ('opened_by') es extraído automáticamente del token JWT por el backend.
- *    - Si incluye 'outcome' nace cerrada automáticamente (requiere scope "field").
- *
- * 3. PATCH /interventions/{intervention_id}
- *    - Body: { outcome: "back_online" | "replaced" | "reconfigured" | "no_fault_found", outcome_notes?: string }
- *    - Requiere scope: "field"
- *    - Cierra la intervención registrando la resolución.
- *
- * 4. NOTA SOBRE DELETE:
- *    - La API NO expone endpoint DELETE para intervenciones (son registros inmutables de auditoría).
- */
+import client from '../api/client'
 
-// TODO (Backend Integration): Importar el cliente nativo para sustituir localStorage:
-// import client from '../api/client'
+const getItems = (data) => {
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.items)) return data.items
+  if (Array.isArray(data?.data)) return data.data
+  return []
+}
 
-const STORAGE_KEY = 'site-interventions-v1'
+const getTotalCount = (data, fallback) => {
+  const totalCount = data?.meta?.totalCount ??
+    data?.meta?.total_count ??
+    data?.meta?.total ??
+    data?.totalCount ??
+    data?.total_count ??
+    data?.total
+  const parsedCount = Number(totalCount)
+  return totalCount == null || !Number.isFinite(parsedCount) ? fallback : parsedCount
+}
+
+const normalizeIntervention = (intervention) => ({
+  ...intervention,
+  id: intervention.id ?? intervention.intervention_id ?? intervention._id,
+  siteId: String(intervention.site_id ?? intervention.siteId ?? ''),
+  sensorId: intervention.sensor_id ?? intervention.sensorId ?? null,
+  senderName: intervention.opened_by ?? intervention.senderName ?? '',
+  reason: intervention.reason ?? '',
+  createdAt:
+    intervention.opened_at ??
+    intervention.created_at ??
+    intervention.createdAt ??
+    null,
+  status: intervention.status ?? (intervention.outcome ? 'closed' : 'open'),
+})
 
 export const interventionService = {
-  /**
-   * TODO (Backend Integration): Reemplazar por llamada asíncrona a la API:
-   *
-   * getInterventions: async (params = {}) => {
-   *   const query = {}
-   *   if (params.site_id) query.site_id = Number(params.site_id)
-   *   if (params.sensor_id) query.sensor_id = Number(params.sensor_id)
-   *   if (params.status && params.status !== 'all') query.status = params.status
-   *   if (params.page) query.page = params.page
-   *   if (params.page_size) query.page_size = params.page_size
-   *
-   *   const response = await client.get('/interventions', { params: query })
-   *   return Array.isArray(response.data) ? response.data : (response.data?.items || response.data?.data || [])
-   * }
-   */
-  getInterventions: () => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (!stored) return []
+  getInterventions: async (params = {}) => {
+    const pageSize = 100
+    const query = {}
+    if (params.site_id != null && params.site_id !== '') query.site_id = params.site_id
+    if (params.sensor_id != null && params.sensor_id !== '') query.sensor_id = params.sensor_id
+    if (params.status && params.status !== 'all') query.status = params.status
 
-    const interventions = JSON.parse(stored)
-    if (!Array.isArray(interventions)) {
-      throw new Error('El registro local de intervenciones tiene un formato inválido.')
+    const interventions = []
+    let page = 1
+    let totalCount = Infinity
+
+    while (interventions.length < totalCount) {
+      const { data } = await client.get('/interventions', {
+        params: { ...query, page, page_size: pageSize },
+      })
+      const items = getItems(data)
+      interventions.push(...items.map(normalizeIntervention))
+      totalCount = getTotalCount(data, Infinity)
+
+      if (items.length < pageSize || !items.length) break
+      page += 1
     }
 
     return interventions
   },
 
-  /**
-   * TODO (Backend Integration): Reemplazar por llamada POST:
-   *
-   * createIntervention: async ({ siteId, sensorId, reason, outcome, outcomeNotes }) => {
-   *   const payload = {
-   *     site_id: Number(siteId),
-   *     sensor_id: sensorId ? Number(sensorId) : null,
-   *     reason: reason.trim(),
-   *   }
-   *   if (outcome) payload.outcome = outcome
-   *   if (outcomeNotes) payload.outcome_notes = outcomeNotes.trim()
-   *
-   *   const response = await client.post('/interventions', payload)
-   *   return response.data
-   * }
-   */
-  createIntervention: (intervention) => {
-    const interventions = interventionService.getInterventions()
-    const newIntervention = {
-      ...intervention,
-      id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
-      createdAt: new Date().toISOString(),
+  createIntervention: async ({ siteId, sensorId, reason }) => {
+    const site_id = Number(siteId)
+    if (!Number.isInteger(site_id)) {
+      throw new TypeError('El identificador del centro debe ser un número entero.')
+    }
+    if (typeof reason !== 'string' || !reason.trim()) {
+      throw new TypeError('La descripción de la intervención es obligatoria.')
     }
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([newIntervention, ...interventions]))
-    return newIntervention
-  },
-
-  /**
-   * TODO (Backend Integration): La API no tiene PUT libre de edición general.
-   * En su lugar, el backend utiliza PATCH /interventions/{id} para cerrar/resolver la intervención:
-   *
-   * closeIntervention: async (interventionId, { outcome, outcomeNotes }) => {
-   *   const payload = {
-   *     outcome, // Enum: 'back_online' | 'replaced' | 'reconfigured' | 'no_fault_found'
-   *     outcome_notes: outcomeNotes ? outcomeNotes.trim() : null,
-   *   }
-   *   const response = await client.patch(`/interventions/${interventionId}`, payload)
-   *   return response.data
-   * }
-   */
-  updateIntervention: (id, updates) => {
-    const interventions = interventionService.getInterventions()
-    const index = interventions.findIndex((intervention) => intervention.id === id)
-    if (index === -1) throw new Error('No se encontró la intervención que intentas editar.')
-
-    const updatedIntervention = {
-      ...interventions[index],
-      ...updates,
-      updatedAt: new Date().toISOString(),
+    const payload = {
+      site_id,
+      sensor_id: sensorId == null || sensorId === '' ? null : Number(sensorId),
+      reason: reason.trim(),
     }
-    interventions[index] = updatedIntervention
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(interventions))
-    return updatedIntervention
-  },
-
-  /**
-   * TODO (Backend Integration): En la API real NO existe DELETE /interventions.
-   * Las intervenciones no se eliminan; el ciclo de vida oficial termina cerrándolas vía PATCH con un 'outcome'.
-   */
-  deleteIntervention: (id) => {
-    const interventions = interventionService.getInterventions()
-    const remainingInterventions = interventions.filter((intervention) => intervention.id !== id)
-    if (remainingInterventions.length === interventions.length) {
-      throw new Error('No se encontró la intervención que intentas eliminar.')
+    if (payload.sensor_id != null && !Number.isInteger(payload.sensor_id)) {
+      throw new TypeError('El identificador del sensor debe ser un número entero.')
     }
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(remainingInterventions))
-    return remainingInterventions
+    const { data } = await client.post('/interventions', payload)
+    return data
   },
 }
