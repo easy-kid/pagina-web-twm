@@ -90,8 +90,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 px-4 py-12 relative transition-colors">
-      {/* Botón de alternancia de tema posicionado en la esquina superior derecha */}
-      <div className="absolute top-5 right-5 z-20">
+      {/* Botón de alternancia de tema posicionado en la esquina superior izquierda */}
+      <div className="absolute top-5 left-5 z-20">
         <ThemeToggle />
       </div>
 
