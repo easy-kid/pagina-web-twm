@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Building,
   ClipboardCheck,
+  LineChart,
   LogOut,
   Menu,
   Radio,
