@@ -8,8 +8,12 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard,
+  Building,
+  ClipboardCheck,
+  LineChart,
   LogOut,
   Menu,
+  Radio,
   X,
 } from '../Common/Icons'
 import ThemeToggle from '../Theme/ThemeToggle'
@@ -55,6 +59,26 @@ export default function MainLayout() {
       label: 'Dashboard',
       icon: LayoutDashboard,
       end: true,
+    },
+    {
+      to: '/sites',
+      label: 'Centros de cultivo',
+      icon: Building,
+    },
+    {
+      to: '/sensors',
+      label: 'Sensores',
+      icon: Radio,
+    },
+    {
+      to: '/measurements',
+      label: 'Mediciones',
+      icon: LineChart,
+    },
+    {
+      to: '/interventions',
+      label: 'Intervenciones',
+      icon: ClipboardCheck,
     },
   ]
 

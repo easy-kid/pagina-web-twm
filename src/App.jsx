@@ -1,51 +1,55 @@
-/**
- * App.jsx: Orquestador principal de enrutamiento y contextos globales.
- */
-
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
-import { ThemeProvider } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/Layout/MainLayout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import SensorDetailPage from './pages/SensorDetailPage'
+import { SiteDetail } from './components/SiteDetail'
+import { SitesList } from './components/SitesList'
+import InterventionsPage from './pages/InterventionsPage'
+import SensorsPage from './pages/SensorsPage'
+import MeasurementsPage from './pages/MeasurementsPage'
+import NotFoundPage from './components/NotFoundPage'
 
-/**
- * App:
- * Función componente principal que compone la arquitectura declarativa de la aplicación.
- *
- * @returns {JSX.Element} Árbol de contextos y enrutador configurado.
- */
 export default function App() {
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            {/* Ruta pública de control de acceso */}
-            <Route path="/login" element={<LoginPage />} />
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          {/* Ruta pública de Login */}
+          <Route path="/login" element={<LoginPage />} />
 
-            {/* Rutas privadas y protegidas */}
-            <Route
-              element={
-                <ProtectedRoute>
-                  <MainLayout />
-                </ProtectedRoute>
-              }
-            >
-              {/* Dashboard de monitoreo operativo y supervisión de sensores */}
-              <Route path="/" element={<DashboardPage />} />
+          {/* Rutas protegidas dentro del Layout */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            {/* Dashboard de sensores y telemetría */}
+            <Route path="/" element={<DashboardPage />} />
 
-              {/* Vista detallada con telemetría cronológica y gráfico Recharts */}
-              <Route path="/sensors/:id" element={<SensorDetailPage />} />
-            </Route>
+            {/* Gráfico histórico del sensor */}
+            <Route path="/sensors/:id" element={<SensorDetailPage />} />
+            <Route path="/sensors" element={<SensorsPage />} />
 
-            {/* Redirección por defecto */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </ThemeProvider>
+            {/* Consulta de mediciones */}
+            <Route path="/measurements" element={<MeasurementsPage />} />
+
+            {/* Centros de cultivo y sensores asociados */}
+            <Route path="/sites" element={<SitesList />} />
+            <Route path="/sites/:siteId" element={<SiteDetail />} />
+
+            {/* Intervenciones */}
+            <Route path="/interventions" element={<InterventionsPage />} />
+
+            {/* Página para rutas que no existen */}
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   )
 }

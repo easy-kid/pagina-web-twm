@@ -1,462 +1,509 @@
-/**
- * VISTA PRINCIPAL DE SUPERVISIÓN OPERATIVA (DashboardPage.jsx)
- * VISTA PRINCIPAL DE SUPERVISIÓN OPERATIVA (DashboardPage.jsx)
- */
-
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
-  CheckCircle2,
   WifiOff,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
   Radio,
+  Building,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   Search,
-  X,
-  Activity,
+  ClipboardCheck,
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
-import { siteService } from '../services/siteService'
+import { getSiteId, siteService } from '../services/siteService'
+import { interventionService } from '../services/interventionService'
+import NotFoundPage from '../components/NotFoundPage'
+import { isNotFoundError } from '../api/client'
 
-/**
- * DashboardPage:
- * Función componente principal que orquesta la supervisión operativa,
- * el filtrado multicriterio, la paginación y las métricas KPI.
- *
- * @returns {JSX.Element} Panel de control interactivo.
- */
 export default function DashboardPage() {
   const navigate = useNavigate()
-
-  /**
-   * Almacén asociativo en memoria persistente durante el ciclo de vida del componente:
-   * Evita llamadas redundantes a la API al cambiar entre filtros.
-   */
   const cacheRef = useRef(new Map())
 
-  // Métricas consolidadas del sistema (tarjetas KPI superiores)
+  // Métricas del sistema calculadas combinando rutas
   const [metrics, setMetrics] = useState({
     total: 0,
     offlineCount: 0,
     outOfRangeCount: 0,
     normalCount: 0,
+    unknownCount: 0,
   })
 
-  // Lista de sensores y estados de control
+  // Lista de sensores y filtro
   const [sensors, setSensors] = useState([])
   const [siteNames, setSiteNames] = useState({})
+  const [sitesList, setSitesList] = useState([])
+  const [siteNamesError, setSiteNamesError] = useState(false)
   const [loadingSensors, setLoadingSensors] = useState(true)
+  const [sensorError, setSensorError] = useState('')
+  const [metricsError, setMetricsError] = useState('')
+  const [notFound, setNotFound] = useState(false)
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'out_of_range' | 'no_data' | 'ok'
+  const [siteFilter, setSiteFilter] = useState('all') // 'all' | siteId
   const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(1)
+  const [totalSensorsCount, setTotalSensorsCount] = useState(0)
   const [pageSize] = useState(10)
+  const [interventions, setInterventions] = useState([])
+  const [interventionsLoading, setInterventionsLoading] = useState(true)
+  const [interventionsError, setInterventionsError] = useState('')
 
-  /**
-   * loadMetrics:
-   * Función asíncrona que recupera las métricas consolidadas de la red invocando
-   * `sensorService.getDashboardMetrics()`.
-   */
+  useEffect(() => {
+    let active = true
+
+    const loadInterventionsData = async () => {
+      setInterventionsLoading(true)
+      setInterventionsError('')
+
+      try {
+        const interventionsResult = await interventionService.getInterventions()
+        if (!active) return
+
+        const recentInterventions = [...interventionsResult]
+          .sort((a, b) => {
+            const dateA = Date.parse(a.createdAt || '') || 0
+            const dateB = Date.parse(b.createdAt || '') || 0
+            return dateB - dateA
+          })
+          .slice(0, 4)
+        setInterventions(recentInterventions)
+      } catch (error) {
+        console.error('Error al cargar las intervenciones recientes:', error)
+        if (active) setInterventionsError('No fue posible cargar las intervenciones.')
+      } finally {
+        if (active) setInterventionsLoading(false)
+      }
+    }
+
+    loadInterventionsData()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    const loadSiteNames = async () => {
+      try {
+        const sites = await siteService.getSites()
+        const validSites = sites.filter((site) => getSiteId(site) != null && site.name)
+        const namesById = Object.fromEntries(
+          validSites.map((site) => [String(getSiteId(site)), site.name]),
+        )
+        if (active) {
+          setSiteNames(namesById)
+          setSitesList(validSites)
+        }
+      } catch (error) {
+        console.error('Error al cargar los nombres de los centros:', error)
+        if (active) setSiteNamesError(true)
+      }
+    }
+
+    loadSiteNames()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // Cargar métricas ejecutivas
   const loadMetrics = useCallback(async () => {
     try {
       const data = await sensorService.getDashboardMetrics()
       setMetrics(data)
+      setMetricsError('')
     } catch (err) {
-      console.error('[DashboardPage] Error al sincronizar métricas operacionales:', err)
+      console.error('Error al cargar métricas:', err)
+      if (isNotFoundError(err)) setNotFound(true)
+      else setMetricsError('No fue posible actualizar las métricas de sensores.')
     }
   }, [])
 
-  /**
-   * loadSensors:
-   * Recupera la colección completa de sensores para el filtro actual implementando
-   * una estrategia Cache-First. Si los datos ya existen en `cacheRef`, se hidratan de inmediato;
-   * en paralelo o de fondo, se refresca la información desde la API.
-   *
-   * @param {boolean} [isBackgroundRefresh=false] - Indica si la carga ocurre en segundo plano sin activar spinners.
-   */
-  const loadSensors = useCallback(async (isBackgroundRefresh = false) => {
-    const cacheKey = statusFilter
+  // Cargar lista de sensores con filtro de estado, centro, paginación y caché en memoria
+  const loadSensors = useCallback(async () => {
+    const cacheKey = `${statusFilter}_${siteFilter}_${page}_${pageSize}`
 
-    // 1. Lectura inmediata desde la caché en memoria si está disponible
-    if (cacheRef.current.has(cacheKey) && !isBackgroundRefresh) {
+    if (cacheRef.current.has(cacheKey)) {
       const cached = cacheRef.current.get(cacheKey)
-      setSensors(cached)
+      setSensors(cached.items)
+      setTotalSensorsCount(cached.totalCount)
       setLoadingSensors(false)
-      return
-    }
-
-    if (!isBackgroundRefresh) {
+    } else {
       setLoadingSensors(true)
     }
 
     try {
-      const params = {}
+      setSensorError('')
+      const params = {
+        page,
+        page_size: pageSize,
+      }
       if (statusFilter !== 'all') {
         params.status = statusFilter
       }
-
-      // Descarga exhaustiva paralela de todas las páginas para filtrado local
-      const result = await sensorService.getAllSensors(params)
-      const items = result.items || []
-
-      // 2. Actualización de caché y del estado de React
-      cacheRef.current.set(cacheKey, items)
-      setSensors(items)
-    } catch (err) {
-      console.error(`[DashboardPage] Error al obtener sensores para el filtro "${statusFilter}":`, err)
-      // Si falla la red pero hay datos en caché previa, los mantenemos
-      if (!cacheRef.current.has(cacheKey)) {
-        setSensors([])
+      if (siteFilter !== 'all') {
+        params.site_id = siteFilter
       }
+
+      const { items, meta } = await sensorService.getSensors(params)
+      cacheRef.current.set(cacheKey, {
+        items,
+        totalCount: meta.totalCount || 0,
+      })
+      setSensors(items)
+      setTotalSensorsCount(meta.totalCount || 0)
+    } catch (err) {
+      console.error('Error al cargar sensores:', err)
+      if (isNotFoundError(err)) setNotFound(true)
+      else setSensorError('No fue posible cargar los sensores.')
     } finally {
       setLoadingSensors(false)
     }
-  }, [statusFilter])
+  }, [page, pageSize, statusFilter, siteFilter])
 
-  /**
-   * Sincronización inicial y sondeo periódico (Polling):
-   * Ejecuta la carga inicial y establece un temporizador de intervalo a 30 segundos
-   * para mantener las métricas y la tabla actualizadas sin interacción manual.
-   */
   useEffect(() => {
     loadMetrics()
-    loadSensors()
+  }, [loadMetrics])
 
-    // Intervalo de actualización periódica en segundo plano (30 segundos)
-    const interval = setInterval(() => {
-      loadMetrics()
-      loadSensors(true)
-    }, 30000)
-
-    return () => clearInterval(interval)
-  }, [loadMetrics, loadSensors])
-
-  /**
-   * Sincronización al cambiar el filtro de estado:
-   * Resetea el índice de página a la primera posición y dispara la carga de la colección filtrada.
-   */
   useEffect(() => {
-    setPage(1)
     loadSensors()
-  }, [statusFilter, loadSensors])
+  }, [loadSensors])
 
-  /**
-   * Carga del catálogo de centros de cultivo:
-   * Permite resolver nombres oficiales de sitios para búsqueda y visualización.
-   */
-  useEffect(() => {
-    let isMounted = true
+  const totalPages = Math.max(1, Math.ceil(totalSensorsCount / pageSize))
+  const openInterventionsCount = interventions.filter((item) => item.status === 'open').length
 
-    const loadSiteCatalog = async () => {
-      try {
-        const sites = await siteService.getSites()
-        if (Array.isArray(sites) && isMounted) {
-          const mapping = {}
-          sites.forEach((site) => {
-            const sId = site.id ?? site._id
-            if (sId != null && site.name) {
-              mapping[String(sId)] = site.name
-            }
-          })
-          setSiteNames(mapping)
-        }
-      } catch (err) {
-        console.warn('[DashboardPage] Error al recuperar centros de cultivo:', err)
-      }
-    }
+  // Búsqueda inteligente: filtra por nombre de sensor, nombre de centro, posición, profundidad o estado
+  const displayedSensors = sensors.filter((s) => {
+    if (!searchTerm.trim()) return true
+    const term = searchTerm.toLowerCase().trim()
+    const sensorName = (s.name || '').toLowerCase()
+    const siteName = (siteNames[String(s.site_id)] || '').toLowerCase()
+    const position = (s.position || '').toLowerCase()
+    const depthStr = s.depth != null ? `${s.depth}m ${s.depth}` : ''
+    const typeStr = (s.type || '').toLowerCase()
+    const sensorId = String(s.id ?? '')
+    const siteId = String(s.site_id ?? '')
 
-    loadSiteCatalog()
-    return () => {
-      isMounted = false
-    }
-  }, [])
+    const statusMatch =
+      ((term.includes('operat') || term === 'ok' || term.includes('normal')) && s.status === 'ok') ||
+      ((term.includes('descon') || term.includes('off') || term.includes('inact') || term.includes('sin dat')) && s.status === 'no_data') ||
+      ((term.includes('rango') || term.includes('alert') || term.includes('anom')) && s.status === 'out_of_range')
 
-  /**
-   * handleClearSearch:
-   * Limpia el término de búsqueda activo y regresa el paginado al inicio.
-   */
-  const handleClearSearch = () => {
-    setSearchTerm('')
+    return (
+      sensorName.includes(term) ||
+      siteName.includes(term) ||
+      position.includes(term) ||
+      depthStr.includes(term) ||
+      typeStr.includes(term) ||
+      sensorId.includes(term) ||
+      siteId === term ||
+      statusMatch
+    )
+  })
+
+  const handleCardClick = (targetStatus) => {
+    setStatusFilter(targetStatus)
     setPage(1)
   }
 
-  /**
-   * filteredSensors (Memoización de Filtrado y Priorización de Severidad):
-   * 1. Filtra reactivamente de forma exclusiva por sensor (nombre o ID) o nombre de centro.
-   * 2. Aplica ordenamiento estándar por criticidad operacional:
-   *    - 1º Severidad Alta: Sin Transmitir (`no_data`, dispositivos desconectados).
-   *    - 2º Severidad Media: Fuera de Rango (`out_of_range`, oxígeno anómalo).
-   *    - 3º Estado Nominal: Operativos (`ok`, funcionamiento normal).
-   *    - Desempate secundario: Identificador numérico ascendente (`id`).
-   */
-  const filteredSensors = useMemo(() => {
-    let result = sensors
+  const retrySensors = () => {
+    cacheRef.current.delete(`${statusFilter}_${siteFilter}_${page}_${pageSize}`)
+    loadSensors()
+  }
 
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim()
-      result = result.filter((sensor) => {
-        // Criterio 1: Búsqueda exclusiva por sensor (nombre o ID del sensor)
-        const sensorName = (sensor.name || sensor.sensor_name || `Sensor #${sensor.id}`).toLowerCase()
-        const sensorId = String(sensor.id ?? '')
-        const rawSensor = `${sensorName} sensor ${sensorId} #${sensorId}`.toLowerCase()
-        const sensorMatch =
-          rawSensor.includes(term) ||
-          sensorId === term ||
-          `#${sensorId}` === term
-
-        // Criterio 2: Búsqueda exclusiva por nombre de centro
-        const resolvedSiteName = (
-          siteNames[String(sensor.site_id)] ||
-          sensor.site_name ||
-          sensor.site?.name ||
-          (sensor.site_id != null ? `Centro #${sensor.site_id}` : '')
-        ).toLowerCase()
-        const rawSite = `${resolvedSiteName} centro ${sensor.site_id ?? ''} #${sensor.site_id ?? ''}`.toLowerCase()
-        const siteMatch =
-          rawSite.includes(term) ||
-          (sensor.site_id != null && String(sensor.site_id) === term)
-
-        return sensorMatch || siteMatch
-      })
-    }
-
-    // Ordenamiento estándar por severidad operativa: Sin Transmitir -> Fuera de Rango -> Operativos
-    return [...result].sort((a, b) => {
-      const weightA = a.status === 'no_data' ? 1 : a.status === 'out_of_range' ? 2 : 3
-      const weightB = b.status === 'no_data' ? 1 : b.status === 'out_of_range' ? 2 : 3
-
-      if (weightA !== weightB) {
-        return weightA - weightB
-      }
-      return (Number(a.id) || 0) - (Number(b.id) || 0)
-    })
-  }, [sensors, searchTerm, siteNames])
-
-  /**
-   * totalPages (Memoización):
-   * Calcula el número total de páginas según la cantidad de elementos filtrados.
-   */
-  const totalPages = useMemo(() => {
-    return Math.max(1, Math.ceil(filteredSensors.length / pageSize))
-  }, [filteredSensors.length, pageSize])
-
-  /**
-   * displayedSensors (Memoización de Segmentación):
-   * Aplica un corte determinista (`slice`) para presentar únicamente los 10 registros
-   * correspondientes a la página activa en el viewport.
-   */
-  const displayedSensors = useMemo(() => {
-    const startIndex = (page - 1) * pageSize
-    return filteredSensors.slice(startIndex, startIndex + pageSize)
-  }, [filteredSensors, page, pageSize])
-
-  /**
-   * handleRowClick:
-   * Transición de navegación hacia `/sensors/:id`. Transfiere la entidad completa
-   * del sensor a través de `history.state` para evitar una recarga en blanco.
-   *
-   * @param {Object} sensor - Entidad seleccionada.
-   */
-  const handleRowClick = (sensor) => {
-    navigate(`/sensors/${sensor.id}`, { state: { sensor } })
+  if (notFound) {
+    return <NotFoundPage message="La API no encontró uno de los endpoints de sensores solicitados." />
   }
 
   return (
-    <div className="space-y-6">
-      {/* CABECERA Y TÍTULO DE LA PÁGINA */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-          Panel de Control Operacional
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Supervisión en tiempo real de los sensores de oxígeno disuelto en centros de cultivo
-        </p>
+    <div className="space-y-7">
+      <section className="relative isolate overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-6 py-7 text-white shadow-xl shadow-slate-900/10 sm:px-8 sm:py-9">
+        <div className="pointer-events-none absolute -right-12 -top-28 h-80 w-80 rounded-full border border-white/10" />
+        <div className="pointer-events-none absolute -right-2 -top-16 h-60 w-60 rounded-full border border-white/10" />
+        <div className="pointer-events-none absolute -bottom-36 right-1/4 h-72 w-72 rounded-full bg-teal-400/10 blur-3xl" />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-teal-300" />
+              ULA Monitors · Operación
+            </p>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
+              El estado del agua,<br className="hidden sm:block" /> de un vistazo.
+            </h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
+              Monitoreo de oxígeno disuelto, sensores y actividad en tus centros de cultivo.
+            </p>
+            {siteNamesError && (
+              <p className="mt-3 text-xs text-amber-200" role="status">
+                No se pudieron cargar los nombres de los centros; se muestran sus IDs.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/sites')}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/15"
+            >
+              <Building className="h-4 w-4" />
+              Centros
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+        <div className="relative mt-8 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Centros monitoreados</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{sitesList.length}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Sensores activos</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{metrics.normalCount}</p>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Alertas por atender</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{metrics.offlineCount + metrics.outOfRangeCount}</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Tarjetas de Resumen */}
+      {metricsError && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300" role="alert">
+          {metricsError}{' '}
+          <button type="button" onClick={loadMetrics} className="font-semibold underline underline-offset-2">
+            Reintentar
+          </button>
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+        {[
+          {
+            id: 'no_data',
+            label: 'Desconectado',
+            count: metrics.offlineCount,
+            icon: WifiOff,
+            subtext: 'Inactivos (>90 min)',
+            activeClass: 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20',
+            textColor: 'text-rose-600 dark:text-rose-400',
+            iconBox: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400',
+          },
+          {
+            id: 'out_of_range',
+            label: 'Fuera de Rango',
+            count: metrics.outOfRangeCount,
+            icon: AlertTriangle,
+            subtext: 'Oxígeno anómalo',
+            activeClass: 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20',
+            textColor: 'text-amber-600 dark:text-amber-400',
+            iconBox: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
+          },
+          {
+            id: 'ok',
+            label: 'Operativos',
+            count: metrics.normalCount,
+            icon: CheckCircle2,
+            subtext: 'Transmitiendo normal',
+            activeClass: 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20',
+            textColor: 'text-emerald-600 dark:text-emerald-400',
+            iconBox: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
+          },
+          {
+            id: 'all',
+            label: 'Total Sensores',
+            count: metrics.total,
+            icon: Radio,
+            subtext: `${metrics.unknownCount} sin estado · Ver todos los sensores`,
+            activeClass: 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20',
+            textColor: 'text-slate-900 dark:text-white',
+            iconBox: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
+          },
+        ].map((card) => {
+          const isSelected = statusFilter === card.id
+          const Icon = card.icon
+
+          return (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => handleCardClick(card.id)}
+              className={`text-left p-5 rounded-2xl border transition-colors duration-150 cursor-pointer relative overflow-hidden group ${
+                isSelected
+                  ? card.activeClass
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-wider ${isSelected ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'}`}>
+                    {card.label}
+                  </p>
+                  <h3 className={`text-3xl font-extrabold mt-1.5 ${isSelected ? 'text-white' : card.textColor}`}>
+                    {card.count}
+                  </h3>
+                </div>
+                <div className={`p-2.5 rounded-xl ${isSelected ? 'bg-white/20 text-white' : card.iconBox}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+              </div>
+              <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${isSelected ? 'text-white/90' : card.textColor}`}>
+                {card.subtext}
+              </p>
+            </button>
+          )
+        })}
       </div>
 
-      {/* TARJETAS DE MÉTRICAS OPERACIONALES (Indicadores de Estado Informativos) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI: Sin Transmitir */}
-        <div
-          className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${statusFilter === 'no_data'
-            ? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 shadow-sm ring-2 ring-rose-500/20'
-            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
-            }`}
-        >
-          <div className="flex items-center justify-between">
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)]">
+        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Sin Transmitir
-              </p>
-              <h3 className="text-3xl font-extrabold text-rose-600 dark:text-rose-400 mt-1">
-                {metrics.offlineCount}
-              </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                Inactivos (&gt;90 min)
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700 dark:text-blue-300">Seguimiento</p>
+              <h2 className="mt-1 text-base font-semibold text-slate-900 dark:text-white">Intervenciones recientes</h2>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center text-rose-600 dark:text-rose-400">
-              <WifiOff className="w-6 h-6" />
-            </div>
+            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+              {openInterventionsCount} abiertas
+            </span>
           </div>
-        </div>
-
-        {/* KPI: Fuera de Rango */}
-        <div
-          className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${statusFilter === 'out_of_range'
-            ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 shadow-sm ring-2 ring-amber-500/20'
-            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
-            }`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Fuera de Rango
-              </p>
-              <h3 className="text-3xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">
-                {metrics.outOfRangeCount}
-              </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                Oxígeno anómalo
-              </p>
+          {interventionsError ? (
+            <div className="px-5 py-10 text-center text-sm text-rose-600 dark:text-rose-300" role="alert">
+              <p>{interventionsError}</p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400">
-              <AlertTriangle className="w-6 h-6" />
+          ) : interventionsLoading ? (
+            <p className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400" role="status">Cargando intervenciones...</p>
+          ) : interventions.length === 0 ? (
+            <div className="px-5 py-10 text-center">
+              <ClipboardCheck className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-600" />
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">No hay intervenciones registradas.</p>
             </div>
+          ) : (
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {interventions.map((intervention, index) => (
+                <li key={intervention.id ?? `${intervention.createdAt}-${index}`} className="px-5 py-3.5">
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${intervention.status === 'open' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">
+                        {intervention.reason || `Centro ${intervention.siteId}`}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Centro {intervention.siteId || '—'}{intervention.sensorId ? ` · Sensor ${intervention.sensorId}` : ''}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{formatChileDateTime(intervention.createdAt)}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${intervention.status === 'open' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'}`}>
+                      {intervention.status === 'open' ? 'Abierta' : 'Cerrada'}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="border-t border-slate-100 px-5 py-3 dark:border-slate-800">
+            <button type="button" onClick={() => navigate('/interventions')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200">
+              Ver todas las intervenciones
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
           </div>
-        </div>
+        </article>
+      </section>
 
-        {/* KPI: Operativos */}
-        <div
-          className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${statusFilter === 'ok'
-            ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 shadow-sm ring-2 ring-emerald-500/20'
-            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
-            }`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Operativos
-              </p>
-              <h3 className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
-                {metrics.normalCount}
-              </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                Transmitiendo normal
-              </p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-          </div>
-        </div>
-
-        {/* KPI: Total Sensores */}
-        <div
-          className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${statusFilter === 'all'
-            ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800 shadow-sm ring-2 ring-blue-500/20'
-            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs'
-            }`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Total Sensores
-              </p>
-              <h3 className="text-3xl font-extrabold text-slate-800 dark:text-white mt-1">
-                {metrics.total}
-              </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                Registrados en sistema
-              </p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
-              <Radio className="w-6 h-6" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* SECCIÓN DE TABLA DE SENSORES CON BUSCADOR Y FILTROS */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden transition-colors">
-        {/* Barra de herramientas: Búsqueda y Selector de Filtro */}
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Tabla Interactiva de Sensores */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden transition-colors">
+        {/* Cabecera de la Tabla y Filtros */}
+        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white">
-              Listado General de Sensores
+              {statusFilter === 'all' && 'Listado General de Sensores'}
+              {statusFilter === 'out_of_range' && 'Sensores Fuera de Rango (Alerta)'}
+              {statusFilter === 'no_data' && 'Sensores Desconectados'}
+              {statusFilter === 'ok' && 'Sensores Operativos'}
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Ordenados por criticidad: Sin Transmitir → Fuera de Rango → Operativos
+              Mostrando sensores según el filtro seleccionado arriba
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Input de Búsqueda Reactiva Multicriterio */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <Search className="w-4 h-4" />
-              </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-wrap">
+            {/* Buscador inteligente: nombre de sensor, centro, posición, estado */}
+            <div className="relative min-w-[220px] flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
-                placeholder="Buscar por sensor o nombre de centro..."
+                placeholder="Buscar por sensor, centro, posición..."
                 value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value)
-                  setPage(1)
-                }}
-                className="w-full sm:w-64 pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition"
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition"
               />
               {searchTerm && (
                 <button
                   type="button"
-                  onClick={handleClearSearch}
-                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                  aria-label="Limpiar búsqueda"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title="Limpiar búsqueda"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  ✕
                 </button>
               )}
             </div>
 
-            {/* Dropdown de Estado Interactivo */}
-            <div className="relative inline-block">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none py-2 pl-3 pr-8 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors"
-              >
-                <option value="all">Todos los estados</option>
-                <option value="no_data">Sin Transmitir</option>
-                <option value="out_of_range">Fuera de Rango</option>
-                <option value="ok">Operativos</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-slate-400 dark:text-slate-500">
-                <ChevronDown className="w-3.5 h-3.5" />
-              </div>
-            </div>
+            {/* Selector de Centro */}
+            <select
+              value={siteFilter}
+              onChange={(e) => {
+                setSiteFilter(e.target.value)
+                setPage(1)
+              }}
+              aria-label="Filtrar por centro"
+              className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="all">Todos los centros</option>
+              {sitesList.map((site) => {
+                const sId = String(getSiteId(site))
+                return (
+                  <option key={sId} value={sId}>
+                    {site.name || `Centro #${sId}`}
+                  </option>
+                )
+              })}
+            </select>
+
+            {/* Selector de Estado */}
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value)
+                setPage(1)
+              }}
+              aria-label="Filtrar por estado"
+              className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="all">Todos los estados</option>
+              <option value="ok">Operativos</option>
+              <option value="out_of_range">Fuera de Rango</option>
+              <option value="no_data">Desconectados</option>
+            </select>
           </div>
         </div>
 
-        {/* Contenido de la Tabla */}
+        {/* Tabla */}
+        {sensorError && (
+          <div className="border-b border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300" role="alert">
+            {sensorError}{' '}
+            <button type="button" onClick={retrySensors} className="font-semibold underline underline-offset-2">
+              Reintentar
+            </button>
+          </div>
+        )}
         {displayedSensors.length === 0 && !loadingSensors ? (
-          <div className="py-16 text-center text-slate-400 dark:text-slate-500">
-            <Radio className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-            <p className="text-sm font-medium">No se encontraron sensores con los criterios seleccionados</p>
-            <p className="text-xs mt-1">
-              {searchTerm
-                ? 'Pruebe utilizando un término de búsqueda diferente o limpiando el filtro.'
-                : 'No existen registros disponibles para este estado.'}
+          <div className="p-12 text-center text-slate-500 dark:text-slate-400">
+            <p className="text-sm font-medium">
+              {sensorError ? 'No se pudieron cargar los sensores.' : 'No se encontraron sensores para este criterio.'}
             </p>
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={handleClearSearch}
-                className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>Limpiar búsqueda</span>
-              </button>
-            )}
           </div>
         ) : (
           <div className={`overflow-x-auto transition-opacity duration-150 ${loadingSensors ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
@@ -477,11 +524,19 @@ export default function DashboardPage() {
                   <tr key={sensor.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                     <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">
                       <div>{sensor.name}</div>
+                      <div className="text-[11px] font-normal text-slate-400 dark:text-slate-500">ID: #{sensor.id}</div>
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
-                      <span className="font-medium text-slate-700 dark:text-slate-300">
-                        {siteNames[String(sensor.site_id)] || (sensor.site_id != null ? `Centro #${sensor.site_id}` : 'Sin Centro')}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/sites/${sensor.site_id}`)}
+                        className="text-left font-medium hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer"
+                      >
+                        {siteNames[String(sensor.site_id)] || `Centro ${sensor.site_id}`}
+                        <span className="block text-[10px] font-normal text-slate-400 dark:text-slate-500">
+                          ID: {sensor.site_id}
+                        </span>
+                      </button>
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
                       <span className="capitalize">{sensor.position || 'jaula'}</span>
@@ -515,23 +570,45 @@ export default function DashboardPage() {
                         </span>
                       ) : sensor.status === 'no_data' ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded-full">
-                          <WifiOff className="w-3 h-3 text-rose-500" /> Sin Transmitir
+                          <WifiOff className="w-3 h-3 text-rose-500" /> Desconectado
                         </span>
-                      ) : (
+                      ) : sensor.status === 'ok' ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full">
                           <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Operativo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full">
+                          <AlertCircle className="w-3 h-3 text-slate-500" /> Desconocido
                         </span>
                       )}
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleRowClick(sensor)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
-                      >
-                        <Activity className="w-3.5 h-3.5" />
-                        <span>Ver Gráfico</span>
-                      </button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={sensor.site_id == null || sensor.id == null}
+                          onClick={() => navigate('/interventions', {
+                            state: {
+                              openForm: true,
+                              targetType: 'sensor',
+                              siteId: String(sensor.site_id),
+                              sensorId: String(sensor.id),
+                            },
+                          })}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-700 bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:border-blue-800 hover:bg-blue-700 hover:shadow focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+                        >
+                          <ClipboardCheck className="h-3.5 w-3.5" />
+                          <span>Intervenir</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/sensors/${sensor.id}`)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
+                        >
+                          <span>Ver Gráfico</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -541,55 +618,34 @@ export default function DashboardPage() {
         )}
 
         {/* Paginación */}
-        {(totalPages > 1 || searchTerm) && filteredSensors.length > 0 && (
-          <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+        {totalPages > 1 && (
+          <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>
-              {searchTerm ? (
-                <>
-                  Encontrados <strong className="text-slate-800 dark:text-slate-200">{filteredSensors.length}</strong>{' '}
-                  {filteredSensors.length === 1 ? 'sensor' : 'sensores'} para{' '}
-                  <span className="italic font-medium text-slate-700 dark:text-slate-300">"{searchTerm}"</span>
-                  {totalPages > 1 && (
-                    <span className="text-slate-400 ml-1">
-                      (Página {page} de {totalPages})
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  Página <strong className="text-slate-800 dark:text-slate-200">{page}</strong> de{' '}
-                  <strong className="text-slate-800 dark:text-slate-200">{totalPages}</strong> ({sensors.length} sensores)
-                </>
-              )}
+              Página <strong className="text-slate-800 dark:text-slate-200">{page}</strong> de{' '}
+              <strong className="text-slate-800 dark:text-slate-200">{totalPages}</strong> ({totalSensorsCount} sensores)
             </span>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition cursor-pointer text-slate-700 dark:text-slate-300"
-                  aria-label="Página anterior"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <span className="px-2 font-medium text-slate-700 dark:text-slate-300">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition cursor-pointer text-slate-700 dark:text-slate-300"
-                  aria-label="Página siguiente"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition cursor-pointer text-slate-700 dark:text-slate-300"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition cursor-pointer text-slate-700 dark:text-slate-300"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
       </div>
+
     </div>
   )
 }
