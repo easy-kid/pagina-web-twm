@@ -8,6 +8,8 @@ import SensorDetailPage from './pages/SensorDetailPage'
 import { SiteDetail } from './components/SiteDetail'
 import { SitesList } from './components/SitesList'
 import InterventionsPage from './pages/InterventionsPage'
+import SensorsPage from './pages/SensorsPage'
+import MeasurementsPage from './pages/MeasurementsPage'
 import NotFoundPage from './components/NotFoundPage'
 
 export default function App() {
@@ -31,12 +33,16 @@ export default function App() {
 
             {/* Gráfico histórico del sensor */}
             <Route path="/sensors/:id" element={<SensorDetailPage />} />
+            <Route path="/sensors" element={<SensorsPage />} />
+
+            {/* Consulta de mediciones */}
+            <Route path="/measurements" element={<MeasurementsPage />} />
 
             {/* Centros de cultivo y sensores asociados */}
             <Route path="/sites" element={<SitesList />} />
             <Route path="/sites/:siteId" element={<SiteDetail />} />
 
-            {/* Solicitudes locales de intervención */}
+            {/* Intervenciones */}
             <Route path="/interventions" element={<InterventionsPage />} />
 
             {/* Página para rutas que no existen */}

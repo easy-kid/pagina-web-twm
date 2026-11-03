@@ -107,8 +107,6 @@ const requestWithFetch = async (endpoint, method = 'GET', body = null, options =
 const client = {
   get: (endpoint, options = {}) => requestWithFetch(endpoint, 'GET', null, options),
   post: (endpoint, body = null, options = {}) => requestWithFetch(endpoint, 'POST', body, options),
-  patch: (endpoint, body = null, options = {}) => requestWithFetch(endpoint, 'PATCH', body, options),
-  delete: (endpoint, options = {}) => requestWithFetch(endpoint, 'DELETE', null, options),
 }
 
 export default client
