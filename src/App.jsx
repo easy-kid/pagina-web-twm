@@ -1,3 +1,7 @@
+/**
+ * App.jsx: Orquestador principal de enrutamiento y contextos globales.
+ */
+
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
@@ -7,16 +11,22 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import SensorDetailPage from './pages/SensorDetailPage'
 
+/**
+ * App:
+ * Función componente principal que compone la arquitectura declarativa de la aplicación.
+ *
+ * @returns {JSX.Element} Árbol de contextos y enrutador configurado.
+ */
 export default function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            {/* Ruta pública de Login */}
+            {/* Ruta pública de control de acceso */}
             <Route path="/login" element={<LoginPage />} />
 
-            {/* Rutas protegidas dentro del Layout */}
+            {/* Rutas privadas y protegidas */}
             <Route
               element={
                 <ProtectedRoute>
@@ -24,10 +34,10 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              {/* Dashboard de sensores y telemetría */}
+              {/* Dashboard de monitoreo operativo y supervisión de sensores */}
               <Route path="/" element={<DashboardPage />} />
 
-              {/* Gráfico histórico del sensor */}
+              {/* Vista detallada con telemetría cronológica y gráfico Recharts */}
               <Route path="/sensors/:id" element={<SensorDetailPage />} />
             </Route>
 
@@ -39,4 +49,3 @@ export default function App() {
     </ThemeProvider>
   )
 }
-

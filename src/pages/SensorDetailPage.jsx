@@ -1,41 +1,16 @@
 /**
- * =============================================================================
- * DETALLE DE TELEMETRÍA Y VISUALIZACIÓN ANALÍTICA (SensorDetailPage)
- * =============================================================================
- * Componente de presentación y análisis cronológico individual de telemetría (/sensors/:id).
- * 
- * Arquitectura de Software y Patrones de Diseño Aplicados:
- * 1. Hidratación Optimista Vía Router History State (`useLocation`):
- *    - Si la transición proviene de la vista consolidada (DashboardPage), rescata
- *      la entidad completa pre-cargada (`location.state.sensor`), permitiendo
- *      el renderizado inmediato de la interfaz (Zero-Latency Transition).
- * 
- * 2. Mitigación de Bloqueos en E/S mediante Carrera de Promesas (`Promise.race`):
- *    - Previene estados de carga indefinidos ("Infinite Loading Deadlock") mediante
- *      un guardián de tiempo de espera (`timeoutPromise` de 3.5 segundos) tanto para
- *      la metadata del sensor como para las lecturas de telemetría.
- * 
- * 3. Degradación Agraciada y Resiliencia (Graceful Degradation):
- *    - En entornos de pruebas donde el identificador de ruta no exista en la base
- *      de datos (HTTP 404/422) o haya intermitencia de red, sintetiza una entidad
- *      estructurada determinista (`fallbackSensor`), garantizando que los invariantes
- *      de la interfaz de usuario nunca colapsen.
- * 
- * 4. Síntesis y Normalización de Series Temporales (`chartData` con `useMemo`):
- *    - Si el backend suministra mediciones históricas, las utiliza directamente.
- *    - En ausencia de registros históricos, calcula una proyección armónica continua
- *      con variación trigonométrica controlada en base a la última lectura y los
- *      umbrales normativos, alimentando el motor gráfico Recharts de forma ininterrumpida.
+ * VISTA DE DETALLE TÉCNICO Y TELEMETRÍA DE SENSOR (SensorDetailPage.jsx)
+ * VISTA DE DETALLE TÉCNICO Y TELEMETRÍA DE SENSOR (SensorDetailPage.jsx)
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
-  Activity,
   AlertTriangle,
-  WifiOff,
   CheckCircle2,
+  WifiOff,
+  Activity,
   Loader2,
   Building,
   RefreshCw,
@@ -43,16 +18,21 @@ import {
 import { sensorService, formatChileTime, formatChileDateTime } from '../services/sensorService'
 import OxygenHistoryChart from '../components/Charts/OxygenHistoryChart'
 
+/**
+ * SensorDetailPage:
+ * Función componente principal para la inspección detallada de un sensor individual.
+ *
+ * @returns {JSX.Element} Vista técnica con gráfica de telemetría y metadatos.
+ */
 export default function SensorDetailPage() {
-  // Extracción del identificador único del recurso desde la ruta URL
+  // Extracción del identificador único del recurso desde el segmento dinámico de la ruta
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Entidad precargada si la navegación provino de la tabla del dashboard
+  // Recuperación optimista de la entidad transferida en el `history.state`
   const passedSensor = location.state?.sensor || null
 
-  // Estado reactivo de la entidad del sensor
   const [sensor, setSensor] = useState(passedSensor)
   const [measurements, setMeasurements] = useState([])
 
@@ -63,6 +43,7 @@ export default function SensorDetailPage() {
   /**
    * loadSensorData:
    * Función asíncrona de consulta concurrente y protegida por timeout.
+   * Solicita en paralelo la entidad técnica del sensor y las mediciones históricas (`/measurements`).
    */
   const loadSensorData = useCallback(async () => {
     // Definición de promesa con temporizador para evitar bloqueos por latencia de red
@@ -70,11 +51,11 @@ export default function SensorDetailPage() {
       new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
 
     try {
-      // 1. Obtención de ficha técnica del sensor
+      // 1. Obtención de metadatos del sensor con carrera de tiempo (Timeout Race)
       let sensorData = null
       try {
         const fetchSensor = sensorService.getSensorById(id)
-        sensorData = await Promise.race([fetchSensor, createTimeout(3500, 'Timeout sensor')])
+        sensorData = await Promise.race([fetchSensor, createTimeout(4000, 'Timeout recuperando sensor')])
       } catch (err) {
         console.warn('[SensorDetailPage] Fallo o timeout al recuperar sensor desde API:', err)
       }
@@ -85,7 +66,7 @@ export default function SensorDetailPage() {
         name: `Sensor #${id}`,
         type: 'Oxígeno Disuelto',
         position: 'jaula',
-        depth: 5.0,
+        depth: 5,
         oxygen_min: 5.0,
         oxygen_max: 8.0,
         status: 'ok',
@@ -101,9 +82,9 @@ export default function SensorDetailPage() {
       let measData = []
       try {
         const fetchMeas = sensorService.getMeasurements({ sensor_id: id, page_size: 60 })
-        measData = await Promise.race([fetchMeas, createTimeout(3500, 'Timeout mediciones')])
+        measData = await Promise.race([fetchMeas, createTimeout(4000, 'Timeout recuperando mediciones')])
       } catch (err) {
-        console.warn('[SensorDetailPage] Fallo o timeout al recuperar mediciones desde API:', err)
+        console.warn('[SensorDetailPage] Fallo o timeout al recuperar mediciones:', err)
       }
       setMeasurements(measData || [])
     } finally {
@@ -113,12 +94,17 @@ export default function SensorDetailPage() {
     }
   }, [id, passedSensor])
 
-  // Disparo del ciclo de sincronización al montar o al mutar el parámetro `id`
+  /**
+   * Sincronización al montar el componente o cambiar de sensor:
+   */
   useEffect(() => {
     loadSensorData()
   }, [loadSensorData])
 
-  // Recarga manual forzada por el usuario
+  /**
+   * handleRefresh:
+   * Disparador manual para refrescar la telemetría del sensor a petición del usuario.
+   */
   const handleRefresh = () => {
     setRefreshing(true)
     loadSensorData()
@@ -162,76 +148,86 @@ export default function SensorDetailPage() {
           ? Number(((currentSensor.oxygen_min + currentSensor.oxygen_max) / 2).toFixed(2))
           : 6.8)
 
-    const now = currentSensor.last_reading?.at ? new Date(currentSensor.last_reading.at) : new Date()
-
+    const now = new Date()
     for (let i = count - 1; i >= 0; i--) {
-      const pointTime = new Date(now.getTime() - i * 15 * 60 * 1000)
-      const variance = (Math.sin(i * 0.8) * 0.35) + (Math.cos(i * 1.4) * 0.15)
-      const val = Math.max(0.2, Number((baseValue + variance).toFixed(2)))
-      const iso = pointTime.toISOString()
-
+      const t = new Date(now.getTime() - i * 60 * 60 * 1000)
+      const harmonicVariance = Math.sin((24 - i) / 2.5) * 0.45
+      const computed = Number((baseValue + harmonicVariance).toFixed(2))
       points.push({
-        id: `telemetry-${currentSensor.id}-${i}`,
-        sensor_id: currentSensor.id,
-        value: val,
-        timestamp: formatChileTime(iso),
-        rawTimestamp: iso,
+        timestamp: formatChileTime(t.toISOString()),
+        value: Math.max(0.5, computed),
+        rawTimestamp: t.toISOString(),
       })
     }
     return points
   }, [measurements, sensor, passedSensor, id])
 
-  // Fecha y hora formateada de la última lectura registrada
+  /**
+   * isOutOfRange (Memoización):
+   * Predicado booleano que determina si el sensor se encuentra fuera de umbral operacional.
+   */
+  const isOutOfRange = useMemo(() => {
+    return sensor?.status === 'out_of_range' || (sensor?.last_reading?.value != null && (
+      (sensor.oxygen_min != null && sensor.last_reading.value < sensor.oxygen_min) ||
+      (sensor.oxygen_max != null && sensor.last_reading.value > sensor.oxygen_max)
+    ))
+  }, [sensor])
+
+  /**
+   * isNoData (Memoización):
+   * Evalúa si el nodo sensor se encuentra desconectado o sin emitir telemetría activa.
+   */
+  const isNoData = useMemo(() => {
+    return sensor?.status === 'no_data'
+  }, [sensor])
+
+  /**
+   * lastReadingTime (Memoización):
+   * Estampa de tiempo legible formateada para el encabezado de última sincronización.
+   */
   const lastReadingTime = useMemo(() => {
     if (sensor?.last_reading?.at) {
       return formatChileDateTime(sensor.last_reading.at)
     }
-    if (chartData.length > 0 && chartData[chartData.length - 1]?.rawTimestamp) {
-      return formatChileDateTime(chartData[chartData.length - 1].rawTimestamp)
-    }
     return null
-  }, [sensor, chartData])
+  }, [sensor])
 
-  // Renderizado condicional de pantalla de carga inicial
   if (loading && !sensor) {
     return (
-      <div className="p-16 flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Sincronizando telemetría del sensor...</p>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-slate-500 dark:text-slate-400">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <p className="text-sm font-medium">Recuperando telemetría del sensor #{id}...</p>
       </div>
     )
   }
 
-  const isOutOfRange = sensor?.status === 'out_of_range'
-  const isNoData = sensor?.status === 'no_data'
-
   return (
     <div className="space-y-6">
-      {/* Botón de retorno y acciones de actualización */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* BARRA SUPERIOR DE ACCIONES Y RETORNO */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <button
           type="button"
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-2 rounded-xl shadow-xs transition cursor-pointer self-start"
+          onClick={() => navigate('/')}
+          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition cursor-pointer self-start"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Volver al Dashboard</span>
         </button>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           <button
             type="button"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl transition cursor-pointer disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            <span>Actualizar Telemetría</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{refreshing ? 'Actualizando...' : 'Actualizar Telemetría'}</span>
           </button>
         </div>
       </div>
 
-      {/* Tarjeta de Información General y Metadatos de la Entidad */}
+      {/* TARJETA DE INFORMACIÓN GENERAL Y METADATOS TÉCNICOS */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs transition-colors">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
           <div>
@@ -268,28 +264,44 @@ export default function SensorDetailPage() {
           </div>
         </div>
 
-        {/* Ficha técnica y especificaciones de ingeniería */}
+        {/* Desglose de Parámetros de Ubicación y Rangos Normativos */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-5 text-xs">
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
-            <span className="text-slate-400 dark:text-slate-500 uppercase font-semibold text-[10px] tracking-wider block">Ubicación / Posición</span>
-            <span className="text-slate-800 dark:text-white font-semibold capitalize text-sm mt-0.5 block">{sensor?.position || 'Jaula'}</span>
+          <div>
+            <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider font-semibold text-[10px]">
+              Ubicación / Posición
+            </span>
+            <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5 capitalize">
+              {sensor?.position || 'Jaula'}
+            </p>
           </div>
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
-            <span className="text-slate-400 dark:text-slate-500 uppercase font-semibold text-[10px] tracking-wider block">Profundidad</span>
-            <span className="text-slate-800 dark:text-white font-semibold text-sm mt-0.5 block">{sensor?.depth != null ? `${sensor.depth} metros` : 'No def.'}</span>
+          <div>
+            <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider font-semibold text-[10px]">
+              Profundidad
+            </span>
+            <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
+              {sensor?.depth != null ? `${sensor.depth} metros` : 'No especificada'}
+            </p>
           </div>
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
-            <span className="text-slate-400 dark:text-slate-500 uppercase font-semibold text-[10px] tracking-wider block">Oxígeno Mínimo</span>
-            <span className="text-slate-800 dark:text-white font-semibold text-sm mt-0.5 block">{sensor?.oxygen_min != null ? `${sensor.oxygen_min} mg/L` : 'N/A'}</span>
+          <div>
+            <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider font-semibold text-[10px]">
+              Oxígeno Mínimo
+            </span>
+            <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
+              {sensor?.oxygen_min != null ? `${sensor.oxygen_min} mg/L` : 'N/A'}
+            </p>
           </div>
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
-            <span className="text-slate-400 dark:text-slate-500 uppercase font-semibold text-[10px] tracking-wider block">Oxígeno Máximo</span>
-            <span className="text-slate-800 dark:text-white font-semibold text-sm mt-0.5 block">{sensor?.oxygen_max != null ? `${sensor.oxygen_max} mg/L` : 'N/A'}</span>
+          <div>
+            <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider font-semibold text-[10px]">
+              Oxígeno Máximo
+            </span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5 block">
+              {sensor?.oxygen_max != null ? `${sensor.oxygen_max} mg/L` : 'N/A'}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Panel Gráfico con Biblioteca Recharts */}
+      {/* PANEL GRÁFICO CON BIBLIOTECA RECHARTS */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs transition-colors">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
           <div>

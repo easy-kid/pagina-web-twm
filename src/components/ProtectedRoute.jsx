@@ -1,29 +1,28 @@
 /**
- * =============================================================================
- * GUARDIÁN DE RUTAS PROTEGIDAS (ProtectedRoute)
- * =============================================================================
- * Componente de orden superior que intercepta la navegación hacia rutas privadas.
- * 
- * Lógica:
- * - Consulta el estado de autenticación `isAuthenticated` en AuthContext.
- * - Si el usuario NO está autenticado:
- *   Redirige de inmediato a '/login' usando `<Navigate replace />`.
- *   El modificador `replace` evita que la ruta bloqueada quede en el historial atrás.
- * - Si el usuario SÍ está autenticado:
- *   Renderiza los componentes hijos provistos o el `<Outlet />` de React Router.
+ * GUARDIÁN DE RUTAS PRIVADAS Y CONTROL DE ACCESO (ProtectedRoute.jsx)
+ * GUARDIÁN DE RUTAS PRIVADAS Y CONTROL DE ACCESO (ProtectedRoute.jsx)
  */
 
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+/**
+ * ProtectedRoute:
+ * Función componente que evalúa la presencia de credenciales válidas antes de permitir
+ * el acceso al subárbol de componentes o rutas secundarias.
+ *
+ * @param {Object} props - Propiedades del componente guardián.
+ * @param {React.ReactNode} [props.children] - Contenido hijo opcional para envoltorio directo.
+ * @returns {JSX.Element} Vista protegida si está autenticado, o redirección hacia `/login`.
+ */
 export default function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth()
 
-  // Bloqueo de acceso no autorizado
+  // Bloqueo estricto: Si la sesión no es válida, redirige al formulario de acceso
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
 
-  // Renderizado del contenido protegido (hijos explícitos o rutas anidadas mediante Outlet)
+  // Si está autenticado, renderiza los hijos directos o delega en el enrutador hijo
   return children ? children : <Outlet />
 }
