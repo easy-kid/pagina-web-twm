@@ -30,10 +30,7 @@ export default function App() {
           }
         >
           <Routes>
-            {/* Ruta pública de Login */}
             <Route path="/login" element={<LoginPage />} />
-
-            {/* Rutas protegidas dentro del Layout */}
             <Route
               element={
                 <ProtectedRoute>
@@ -41,24 +38,13 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              {/* Dashboard de sensores y telemetría */}
               <Route path="/" element={<DashboardPage />} />
-
-              {/* Gráfico histórico del sensor */}
               <Route path="/sensors/:id" element={<SensorDetailPage />} />
               <Route path="/sensors" element={<SensorsPage />} />
-
-              {/* Consulta de mediciones */}
               <Route path="/measurements" element={<MeasurementsPage />} />
-
-              {/* Centros de cultivo y sensores asociados */}
               <Route path="/sites" element={<SitesList />} />
               <Route path="/sites/:siteId" element={<SiteDetail />} />
-
-              {/* Intervenciones */}
               <Route path="/interventions" element={<InterventionsPage />} />
-
-              {/* Página para rutas que no existen */}
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>
