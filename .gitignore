@@ -8,6 +8,10 @@ pnpm-debug.log*
 lerna-debug.log*
 package-lock.json
 
+# Bloqueo de lockfiles externos (el proyecto usa exclusivamente pnpm)
+package-lock.json
+yarn.lock
+
 node_modules
 dist
 dist-ssr
