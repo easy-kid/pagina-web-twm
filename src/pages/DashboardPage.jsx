@@ -294,11 +294,10 @@ export default function DashboardPage() {
               key={card.id}
               type="button"
               onClick={() => handleCardClick(card.id)}
-              className={`text-left p-5 rounded-2xl border transition-colors duration-150 cursor-pointer relative overflow-hidden group ${
-                isSelected
+              className={`text-left p-5 rounded-2xl border transition-colors duration-150 cursor-pointer relative overflow-hidden group ${isSelected
                   ? card.activeClass
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
-              }`}
+                }`}
             >
               <div className="flex justify-between items-start">
                 <div>
