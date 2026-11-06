@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -15,14 +15,11 @@ import {
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
 import { getSiteId, siteService } from '../services/siteService'
-import NotFoundPage from '../components/NotFoundPage'
-import { isNotFoundError } from '../api/client'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const cacheRef = useRef(new Map())
 
-  // Métricas del sistema calculadas combinando rutas
+  // 1. Estados de métricas del dashboard (combinadas en frontend)
   const [metrics, setMetrics] = useState({
     total: 0,
     offlineCount: 0,
@@ -30,27 +27,32 @@ export default function DashboardPage() {
     normalCount: 0,
     unknownCount: 0,
   })
+  const [metricsError, setMetricsError] = useState('')
 
-  // Lista de sensores y filtro
-  const [sensors, setSensors] = useState([])
+  // 2. Estados de centros de cultivo (para nombres y selector de filtro)
   const [siteNames, setSiteNames] = useState({})
   const [sitesCount, setSitesCount] = useState(0)
   const [sitesList, setSitesList] = useState([])
   const [siteNamesError, setSiteNamesError] = useState(false)
+
+  // 3. Estados de la tabla de sensores
+  const [sensors, setSensors] = useState([])
   const [loadingSensors, setLoadingSensors] = useState(true)
   const [sensorError, setSensorError] = useState('')
-  const [metricsError, setMetricsError] = useState('')
-  const [notFound, setNotFound] = useState(false)
+  const [totalSensorsCount, setTotalSensorsCount] = useState(0)
+
+  // 4. Estados de filtros y paginación
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'out_of_range' | 'no_data' | 'ok'
-  const [siteFilter, setSiteFilter] = useState('all') // 'all' | siteId
+  const [siteFilter, setSiteFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(1)
-  const [totalSensorsCount, setTotalSensorsCount] = useState(0)
-  const [pageSize] = useState(10)
+  const pageSize = 10
+
+  // Carga inicial de centros de cultivo
   useEffect(() => {
     let active = true
 
-    const loadSiteNames = async () => {
+    const loadSites = async () => {
       try {
         const sites = await siteService.getSites()
         const validSites = sites.filter((site) => getSiteId(site) != null && site.name)
@@ -63,18 +65,18 @@ export default function DashboardPage() {
           setSitesList(validSites)
         }
       } catch (error) {
-        console.error('Error al cargar los nombres de los centros:', error)
+        console.error('Error al cargar centros:', error)
         if (active) setSiteNamesError(true)
       }
     }
 
-    loadSiteNames()
+    loadSites()
     return () => {
       active = false
     }
   }, [])
 
-  // Cargar métricas ejecutivas
+  // Carga de métricas ejecutivas (resumen construido combinando peticiones)
   const loadMetrics = useCallback(async () => {
     try {
       const data = await sensorService.getDashboardMetrics()
@@ -82,48 +84,29 @@ export default function DashboardPage() {
       setMetricsError('')
     } catch (err) {
       console.error('Error al cargar métricas:', err)
-      if (isNotFoundError(err)) setNotFound(true)
-      else setMetricsError('No fue posible actualizar las métricas de sensores.')
+      setMetricsError('No fue posible cargar las métricas de sensores.')
     }
   }, [])
 
-  // Cargar lista de sensores con filtro de estado, centro, paginación y caché en memoria
+  // Carga de sensores paginados según los filtros activos
   const loadSensors = useCallback(async () => {
-    const cacheKey = `${statusFilter}_${siteFilter}_${page}_${pageSize}`
-
-    if (cacheRef.current.has(cacheKey)) {
-      const cached = cacheRef.current.get(cacheKey)
-      setSensors(cached.items)
-      setTotalSensorsCount(cached.totalCount)
-      setLoadingSensors(false)
-    } else {
-      setLoadingSensors(true)
-    }
+    setLoadingSensors(true)
+    setSensorError('')
 
     try {
-      setSensorError('')
       const params = {
         page,
         page_size: pageSize,
       }
-      if (statusFilter !== 'all') {
-        params.status = statusFilter
-      }
-      if (siteFilter !== 'all') {
-        params.site_id = siteFilter
-      }
+      if (statusFilter !== 'all') params.status = statusFilter
+      if (siteFilter !== 'all') params.site_id = siteFilter
 
       const { items, meta } = await sensorService.getSensors(params)
-      cacheRef.current.set(cacheKey, {
-        items,
-        totalCount: meta.totalCount || 0,
-      })
       setSensors(items)
       setTotalSensorsCount(meta.totalCount || 0)
     } catch (err) {
       console.error('Error al cargar sensores:', err)
-      if (isNotFoundError(err)) setNotFound(true)
-      else setSensorError('No fue posible cargar los sensores.')
+      setSensorError('No fue posible cargar los sensores. Por favor intente nuevamente.')
     } finally {
       setLoadingSensors(false)
     }
@@ -139,78 +122,51 @@ export default function DashboardPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalSensorsCount / pageSize))
 
-  // Búsqueda inteligente: filtra por nombre de sensor, nombre de centro, posición, profundidad o estado
+  // Filtro de búsqueda en la lista visible
   const displayedSensors = sensors.filter((s) => {
     if (!searchTerm.trim()) return true
     const term = searchTerm.toLowerCase().trim()
     const sensorName = (s.name || '').toLowerCase()
     const siteName = (siteNames[String(s.site_id)] || '').toLowerCase()
     const position = (s.position || '').toLowerCase()
-    const depthStr = s.depth != null ? `${s.depth}m ${s.depth}` : ''
-    const typeStr = (s.type || '').toLowerCase()
-    const sensorId = String(s.id ?? '')
-    const siteId = String(s.site_id ?? '')
+    const idStr = String(s.id ?? '')
 
-    const statusMatch =
-      ((term.includes('operat') || term === 'ok' || term.includes('normal')) && s.status === 'ok') ||
-      ((term.includes('descon') || term.includes('off') || term.includes('inact') || term.includes('sin dat')) && s.status === 'no_data') ||
-      ((term.includes('rango') || term.includes('alert') || term.includes('anom')) && s.status === 'out_of_range')
-
-    return (
-      sensorName.includes(term) ||
-      siteName.includes(term) ||
-      position.includes(term) ||
-      depthStr.includes(term) ||
-      typeStr.includes(term) ||
-      sensorId.includes(term) ||
-      siteId === term ||
-      statusMatch
-    )
+    return sensorName.includes(term) || siteName.includes(term) || position.includes(term) || idStr.includes(term)
   })
 
+  // Al hacer clic en una tarjeta, filtra la tabla directamente por ese estado
   const handleCardClick = (targetStatus) => {
     setStatusFilter(targetStatus)
     setPage(1)
   }
 
-  const retrySensors = () => {
-    cacheRef.current.delete(`${statusFilter}_${siteFilter}_${page}_${pageSize}`)
-    loadSensors()
-  }
-
-  if (notFound) {
-    return <NotFoundPage message="La API no encontró uno de los endpoints de sensores solicitados." />
-  }
-
   return (
     <div className="space-y-7">
-      <section className="relative isolate overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-6 py-7 text-white shadow-xl shadow-slate-900/10 sm:px-8 sm:py-9">
-        <div className="pointer-events-none absolute -right-12 -top-28 h-80 w-80 rounded-full border border-white/10" />
-        <div className="pointer-events-none absolute -right-2 -top-16 h-60 w-60 rounded-full border border-white/10" />
-        <div className="pointer-events-none absolute -bottom-36 right-1/4 h-72 w-72 rounded-full bg-teal-400/10 blur-3xl" />
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      {/* Banner Principal */}
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-6 py-7 text-white shadow-lg sm:px-8 sm:py-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <p className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-200">
+            <p className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200">
               <span className="h-1.5 w-1.5 rounded-full bg-teal-300" />
               ULA Monitors · Operación
             </p>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
-              El estado del agua,<br className="hidden sm:block" /> de un vistazo.
+            <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+              El estado del agua, de un vistazo.
             </h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
+            <p className="mt-2 text-sm text-slate-300">
               Monitoreo de oxígeno disuelto, sensores y actividad en tus centros de cultivo.
             </p>
             {siteNamesError && (
-              <p className="mt-3 text-xs text-amber-200" role="status">
-                No se pudieron cargar los nombres de los centros; se muestran sus IDs.
+              <p className="mt-2 text-xs text-amber-200" role="status">
+                No se pudieron cargar los nombres de los centros; se muestran sus identificadores.
               </p>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div>
             <button
               type="button"
               onClick={() => navigate('/sites')}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/15"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/20"
             >
               <Building className="h-4 w-4" />
               Centros
@@ -218,7 +174,8 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-        <div className="relative mt-8 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
+
+        <div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Centros monitoreados</p>
             <p className="mt-1 text-xl font-semibold tabular-nums">{sitesCount}</p>
@@ -234,7 +191,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Tarjetas de Resumen */}
+      {/* Tarjetas de Resumen Interactivas */}
       {metricsError && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300" role="alert">
           {metricsError}{' '}
@@ -243,7 +200,8 @@ export default function DashboardPage() {
           </button>
         </div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {
             id: 'no_data',
@@ -280,7 +238,7 @@ export default function DashboardPage() {
             label: 'Total Sensores',
             count: metrics.total,
             icon: Radio,
-            subtext: `${metrics.unknownCount} sin estado · Ver todos los sensores`,
+            subtext: `${metrics.unknownCount} sin estado · Ver todos`,
             activeClass: 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20',
             textColor: 'text-slate-900 dark:text-white',
             iconBox: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
@@ -294,10 +252,11 @@ export default function DashboardPage() {
               key={card.id}
               type="button"
               onClick={() => handleCardClick(card.id)}
-              className={`text-left p-5 rounded-2xl border transition-colors duration-150 cursor-pointer relative overflow-hidden group ${isSelected
+              className={`text-left p-5 rounded-2xl border transition duration-150 cursor-pointer ${
+                isSelected
                   ? card.activeClass
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
-                }`}
+              }`}
             >
               <div className="flex justify-between items-start">
                 <div>
@@ -312,7 +271,7 @@ export default function DashboardPage() {
                   <Icon className="w-5 h-5" />
                 </div>
               </div>
-              <p className={`text-xs mt-3 flex items-center gap-1 font-medium ${isSelected ? 'text-white/90' : card.textColor}`}>
+              <p className={`text-xs mt-3 font-medium ${isSelected ? 'text-white/90' : card.textColor}`}>
                 {card.subtext}
               </p>
             </button>
@@ -322,7 +281,7 @@ export default function DashboardPage() {
 
       {/* Tabla Interactiva de Sensores */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden transition-colors">
-        {/* Cabecera de la Tabla y Filtros */}
+        {/* Cabecera y Controles de Filtro */}
         <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white">
@@ -332,20 +291,20 @@ export default function DashboardPage() {
               {statusFilter === 'ok' && 'Sensores Operativos'}
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Mostrando sensores según el filtro seleccionado arriba
+              Filtre por estado, centro de cultivo o busque por nombre
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-wrap">
-            {/* Buscador inteligente: nombre de sensor, centro, posición, estado */}
-            <div className="relative min-w-[220px] flex-1">
+            {/* Buscador */}
+            <div className="relative min-w-[200px] flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
-                placeholder="Buscar por sensor, centro, posición..."
+                placeholder="Buscar sensor o centro..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 transition"
+                className="w-full pl-9 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
               />
               {searchTerm && (
                 <button
@@ -398,19 +357,21 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Tabla */}
+        {/* Mensaje de error al cargar sensores */}
         {sensorError && (
           <div className="border-b border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300" role="alert">
             {sensorError}{' '}
-            <button type="button" onClick={retrySensors} className="font-semibold underline underline-offset-2">
+            <button type="button" onClick={loadSensors} className="font-semibold underline underline-offset-2">
               Reintentar
             </button>
           </div>
         )}
+
+        {/* Cuerpo de la Tabla */}
         {displayedSensors.length === 0 && !loadingSensors ? (
           <div className="p-12 text-center text-slate-500 dark:text-slate-400">
             <p className="text-sm font-medium">
-              {sensorError ? 'No se pudieron cargar los sensores.' : 'No se encontraron sensores para este criterio.'}
+              {sensorError ? 'No fue posible mostrar los sensores.' : 'No se encontraron sensores para este criterio.'}
             </p>
           </div>
         ) : (
@@ -503,7 +464,7 @@ export default function DashboardPage() {
                               sensorId: String(sensor.id),
                             },
                           })}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-700 bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:border-blue-800 hover:bg-blue-700 hover:shadow focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-700 bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <ClipboardCheck className="h-3.5 w-3.5" />
                           <span>Intervenir</span>
@@ -553,7 +514,6 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-
     </div>
   )
 }

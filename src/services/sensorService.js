@@ -7,15 +7,10 @@ const getItems = (data) => {
   return []
 }
 
-const getTotalCount = (data, fallback) => {
-  const totalCount = data?.meta?.totalCount ??
-    data?.meta?.total_count ??
-    data?.meta?.total ??
-    data?.totalCount ??
-    data?.total_count ??
-    data?.total
-  const parsedCount = Number(totalCount)
-  return totalCount == null || !Number.isFinite(parsedCount) ? fallback : parsedCount
+const getTotalCount = (data, fallback = 0) => {
+  const total = data?.meta?.totalCount ?? data?.meta?.total ?? data?.totalCount ?? data?.total
+  const parsed = Number(total)
+  return Number.isFinite(parsed) ? parsed : fallback
 }
 
 // Función auxiliar para formatear la hora de Chile sin desfases de zona horaria del navegador
@@ -81,34 +76,6 @@ export const sensorService = {
         is_out_of_range: sensor.status === 'out_of_range',
       })),
       meta,
-    }
-  },
-
-  // Trae la totalidad de sensores según filtros para búsqueda y paginación global en cliente
-  getAllSensors: async (params = {}) => {
-    const firstPage = await sensorService.getSensors({ ...params, page: 1, page_size: 100 })
-    const total = getTotalCount(firstPage, firstPage.items.length)
-    if (total <= 100) {
-      return {
-        items: firstPage.items,
-        totalCount: total,
-      }
-    }
-
-    const totalPages = Math.ceil(total / 100)
-    const pagePromises = []
-    for (let p = 2; p <= totalPages; p++) {
-      pagePromises.push(sensorService.getSensors({ ...params, page: p, page_size: 100 }))
-    }
-    const otherPages = await Promise.all(pagePromises)
-    const allItems = [
-      ...firstPage.items,
-      ...otherPages.flatMap((res) => res.items),
-    ]
-
-    return {
-      items: allItems,
-      totalCount: total,
     }
   },
 
