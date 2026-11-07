@@ -363,8 +363,7 @@ export default function DashboardPage() {
                 {displayedSensors.map((sensor) => (
                   <tr key={sensor.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                     <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">
-                      <div>{sensor.name}</div>
-                      <div className="text-[11px] font-normal text-slate-400 dark:text-slate-500">ID: #{sensor.id}</div>
+                      {sensor.name}
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
                       <button
@@ -373,9 +372,6 @@ export default function DashboardPage() {
                         className="text-left font-medium hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer"
                       >
                         {siteNames[String(sensor.site_id)] || `Centro ${sensor.site_id}`}
-                        <span className="block text-[10px] font-normal text-slate-400 dark:text-slate-500">
-                          ID: {sensor.site_id}
-                        </span>
                       </button>
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
