@@ -7,14 +7,17 @@ import {
   AlertCircle,
   ArrowRight,
   Radio,
-  Building,
   ChevronLeft,
   ChevronRight,
   Search,
   ClipboardCheck,
+  LineChart,
+  X,
+  Loader2,
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
 import { getSiteId, siteService } from '../services/siteService'
+import OxygenHistoryChart from '../components/Charts/OxygenHistoryChart'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -31,9 +34,7 @@ export default function DashboardPage() {
 
   // 2. Estados de centros de cultivo (para nombres y selector de filtro)
   const [siteNames, setSiteNames] = useState({})
-  const [sitesCount, setSitesCount] = useState(0)
   const [sitesList, setSitesList] = useState([])
-  const [siteNamesError, setSiteNamesError] = useState(false)
 
   // 3. Estados de la tabla de sensores
   const [sensors, setSensors] = useState([])
@@ -48,6 +49,27 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1)
   const pageSize = 10
 
+  // 5. Estado del modal para visualización de gráfico Recharts interactivo
+  const [modalSensor, setModalSensor] = useState(null)
+  const [modalMeasurements, setModalMeasurements] = useState([])
+  const [modalLoading, setModalLoading] = useState(false)
+  const [modalError, setModalError] = useState('')
+
+  const handleOpenChartModal = async (sensor) => {
+    setModalSensor(sensor)
+    setModalLoading(true)
+    setModalError('')
+    try {
+      const data = await sensorService.getMeasurements({ sensor_id: sensor.id, page_size: 60 })
+      setModalMeasurements(data || [])
+    } catch (err) {
+      console.error('Error al cargar mediciones para gráfico Recharts:', err)
+      setModalError('No fue posible cargar el historial de mediciones del sensor.')
+    } finally {
+      setModalLoading(false)
+    }
+  }
+
   // Carga inicial de centros de cultivo
   useEffect(() => {
     let active = true
@@ -61,12 +83,10 @@ export default function DashboardPage() {
         )
         if (active) {
           setSiteNames(namesById)
-          setSitesCount(sites.length)
           setSitesList(validSites)
         }
       } catch (error) {
         console.error('Error al cargar centros:', error)
-        if (active) setSiteNamesError(true)
       }
     }
 
@@ -142,54 +162,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-7">
-      {/* Banner Principal */}
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-6 py-7 text-white shadow-lg sm:px-8 sm:py-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-teal-300" />
-              ULA Monitors · Operación
-            </p>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-              El estado del agua, de un vistazo.
-            </h1>
-            <p className="mt-2 text-sm text-slate-300">
-              Monitoreo de oxígeno disuelto, sensores y actividad en tus centros de cultivo.
-            </p>
-            {siteNamesError && (
-              <p className="mt-2 text-xs text-amber-200" role="status">
-                No se pudieron cargar los nombres de los centros; se muestran sus identificadores.
-              </p>
-            )}
-          </div>
-          <div>
-            <button
-              type="button"
-              onClick={() => navigate('/sites')}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/20"
-            >
-              <Building className="h-4 w-4" />
-              Centros
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Centros monitoreados</p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">{sitesCount}</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Sensores activos</p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">{metrics.normalCount}</p>
-          </div>
-          <div className="col-span-2 sm:col-span-1">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Alertas por atender</p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">{metrics.offlineCount + metrics.outOfRangeCount}</p>
-          </div>
-        </div>
-      </section>
 
       {/* Tarjetas de Resumen Interactivas */}
       {metricsError && (
@@ -252,11 +224,10 @@ export default function DashboardPage() {
               key={card.id}
               type="button"
               onClick={() => handleCardClick(card.id)}
-              className={`text-left p-5 rounded-2xl border transition duration-150 cursor-pointer ${
-                isSelected
-                  ? card.activeClass
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
-              }`}
+              className={`text-left p-5 rounded-2xl border transition duration-150 cursor-pointer ${isSelected
+                ? card.activeClass
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
+                }`}
             >
               <div className="flex justify-between items-start">
                 <div>
@@ -471,11 +442,11 @@ export default function DashboardPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => navigate(`/sensors/${sensor.id}`)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
+                          onClick={() => handleOpenChartModal(sensor)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
                         >
+                          <LineChart className="w-3.5 h-3.5" />
                           <span>Ver Gráfico</span>
-                          <ArrowRight className="w-3 h-3" />
                         </button>
                       </div>
                     </td>
@@ -514,6 +485,80 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Modal flotante interactivo con Recharts para el Dashboard */}
+      {modalSensor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-3xl p-6 shadow-2xl relative">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold text-slate-400">Sensor #{modalSensor.id}</span>
+                  {modalSensor.site_id && (
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      • {siteNames[String(modalSensor.site_id)] || `Centro #${modalSensor.site_id}`}
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <LineChart className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  {modalSensor.name} - Historial de Oxígeno (Recharts)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalSensor(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                aria-label="Cerrar modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-4">
+              {modalLoading ? (
+                <div className="py-20 flex flex-col items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-2" />
+                  <p className="text-xs font-medium text-slate-400">Cargando mediciones...</p>
+                </div>
+              ) : modalError ? (
+                <div className="py-16 text-center text-sm text-rose-600 dark:text-rose-400 font-medium">
+                  {modalError}
+                </div>
+              ) : (
+                <OxygenHistoryChart
+                  data={modalMeasurements}
+                  oxygenMin={modalSensor.oxygen_min}
+                  oxygenMax={modalSensor.oxygen_max}
+                  isOffline={modalSensor.status === 'no_data'}
+                />
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const sid = modalSensor.id
+                  setModalSensor(null)
+                  navigate(`/sensors/${sid}`)
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                <span>Ir al detalle completo del sensor</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalSensor(null)}
+                className="px-4 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
