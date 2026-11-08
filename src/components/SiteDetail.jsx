@@ -134,7 +134,7 @@ export const SiteDetail = () => {
             <div>
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">Sensores asociados</h2>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Estado y acceso al historial de mediciones de este centro.
+                Estado actual de los sensores asociados a este centro.
               </p>
             </div>
             <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
@@ -165,7 +165,7 @@ export const SiteDetail = () => {
                         Estado
                       </th>
                       <th scope="col" className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        Historial
+                        Acciones
                       </th>
                     </tr>
                   </thead>
@@ -203,7 +203,7 @@ export const SiteDetail = () => {
                               onClick={() => navigate(`/sensors/${encodeURIComponent(sensorId)}`)}
                               className="text-sm font-semibold text-blue-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400"
                             >
-                              Ver mediciones
+                              Ver sensor
                             </button>
                           </td>
                         </tr>

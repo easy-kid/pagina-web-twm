@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   Building,
   ClipboardCheck,
-  LineChart,
   LogOut,
   Menu,
   Radio,
@@ -69,11 +68,6 @@ export default function MainLayout() {
       to: '/sensors',
       label: 'Sensores',
       icon: Radio,
-    },
-    {
-      to: '/measurements',
-      label: 'Mediciones',
-      icon: LineChart,
     },
     {
       to: '/interventions',

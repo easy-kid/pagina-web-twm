@@ -299,7 +299,7 @@ export const SitesList = () => {
                                     onClick={() => navigate(`/sensors/${encodeURIComponent(sensorId)}`)}
                                     className="text-sm font-semibold text-blue-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400"
                                   >
-                                    Ver mediciones
+                                    Ver sensor
                                   </button>
                                   </div>
                                 </td>
