@@ -1,23 +1,31 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
   WifiOff,
   CheckCircle2,
   AlertCircle,
-  ArrowRight,
   Radio,
   ChevronLeft,
   ChevronRight,
   Search,
   ClipboardCheck,
   LineChart,
-  X,
-  Loader2,
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
 import { getSiteId, siteService } from '../services/siteService'
-import OxygenHistoryChart from '../components/Charts/OxygenHistoryChart'
+
+// Prioridad de severidad para ordenamiento en tabla: De grave a óptimo
+// 0: no_data (desconectado)
+// 1: out_of_range (fuera de rango)
+// 2: ok (operativo / óptimo)
+// 3: unknown (desconocido)
+const statusPriority = {
+  no_data: 0,
+  out_of_range: 1,
+  ok: 2,
+  unknown: 3,
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -40,7 +48,6 @@ export default function DashboardPage() {
   const [sensors, setSensors] = useState([])
   const [loadingSensors, setLoadingSensors] = useState(true)
   const [sensorError, setSensorError] = useState('')
-  const [totalSensorsCount, setTotalSensorsCount] = useState(0)
 
   // 4. Estados de filtros y paginación
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'out_of_range' | 'no_data' | 'ok'
@@ -48,27 +55,6 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(1)
   const pageSize = 10
-
-  // 5. Estado del modal para visualización de gráfico Recharts interactivo
-  const [modalSensor, setModalSensor] = useState(null)
-  const [modalMeasurements, setModalMeasurements] = useState([])
-  const [modalLoading, setModalLoading] = useState(false)
-  const [modalError, setModalError] = useState('')
-
-  const handleOpenChartModal = async (sensor) => {
-    setModalSensor(sensor)
-    setModalLoading(true)
-    setModalError('')
-    try {
-      const data = await sensorService.getMeasurements({ sensor_id: sensor.id, page_size: 60 })
-      setModalMeasurements(data || [])
-    } catch (err) {
-      console.error('Error al cargar mediciones para gráfico Recharts:', err)
-      setModalError('No fue posible cargar el historial de mediciones del sensor.')
-    } finally {
-      setModalLoading(false)
-    }
-  }
 
   // Carga inicial de centros de cultivo
   useEffect(() => {
@@ -108,29 +94,28 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Carga de sensores paginados según los filtros activos
+  // Carga de sensores según los filtros activos (trae el conjunto para ordenamiento global por gravedad)
   const loadSensors = useCallback(async () => {
     setLoadingSensors(true)
     setSensorError('')
 
     try {
       const params = {
-        page,
-        page_size: pageSize,
+        page: 1,
+        page_size: 100,
       }
       if (statusFilter !== 'all') params.status = statusFilter
       if (siteFilter !== 'all') params.site_id = siteFilter
 
-      const { items, meta } = await sensorService.getSensors(params)
+      const { items } = await sensorService.getSensors(params)
       setSensors(items)
-      setTotalSensorsCount(meta.totalCount || 0)
     } catch (err) {
       console.error('Error al cargar sensores:', err)
       setSensorError('No fue posible cargar los sensores. Por favor intente nuevamente.')
     } finally {
       setLoadingSensors(false)
     }
-  }, [page, pageSize, statusFilter, siteFilter])
+  }, [statusFilter, siteFilter])
 
   useEffect(() => {
     loadMetrics()
@@ -140,19 +125,36 @@ export default function DashboardPage() {
     loadSensors()
   }, [loadSensors])
 
-  const totalPages = Math.max(1, Math.ceil(totalSensorsCount / pageSize))
+  // Filtrado y ordenamiento de sensores: siempre de más grave a óptimo
+  const sortedAndFilteredSensors = useMemo(() => {
+    return sensors
+      .filter((s) => {
+        if (!searchTerm.trim()) return true
+        const term = searchTerm.toLowerCase().trim()
+        const sensorName = (s.name || '').toLowerCase()
+        const siteName = (siteNames[String(s.site_id)] || '').toLowerCase()
+        const position = (s.position || '').toLowerCase()
+        const idStr = String(s.id ?? '')
 
-  // Filtro de búsqueda en la lista visible
-  const displayedSensors = sensors.filter((s) => {
-    if (!searchTerm.trim()) return true
-    const term = searchTerm.toLowerCase().trim()
-    const sensorName = (s.name || '').toLowerCase()
-    const siteName = (siteNames[String(s.site_id)] || '').toLowerCase()
-    const position = (s.position || '').toLowerCase()
-    const idStr = String(s.id ?? '')
+        return sensorName.includes(term) || siteName.includes(term) || position.includes(term) || idStr.includes(term)
+      })
+      .sort((a, b) => {
+        const priorityA = statusPriority[a.status] ?? 3
+        const priorityB = statusPriority[b.status] ?? 3
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB
+        }
+        return (Number(a.id) || 0) - (Number(b.id) || 0)
+      })
+  }, [sensors, searchTerm, siteNames])
 
-    return sensorName.includes(term) || siteName.includes(term) || position.includes(term) || idStr.includes(term)
-  })
+  const totalPages = Math.max(1, Math.ceil(sortedAndFilteredSensors.length / pageSize))
+
+  // Paginación sobre el conjunto ordenado por gravedad
+  const displayedSensors = useMemo(() => {
+    const startIndex = (page - 1) * pageSize
+    return sortedAndFilteredSensors.slice(startIndex, startIndex + pageSize)
+  }, [sortedAndFilteredSensors, page, pageSize])
 
   // Al hacer clic en una tarjeta, filtra la tabla directamente por ese estado
   const handleCardClick = (targetStatus) => {
@@ -274,13 +276,19 @@ export default function DashboardPage() {
                 type="text"
                 placeholder="Buscar sensor o centro..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value)
+                  setPage(1)
+                }}
                 className="w-full pl-9 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
               />
               {searchTerm && (
                 <button
                   type="button"
-                  onClick={() => setSearchTerm('')}
+                  onClick={() => {
+                    setSearchTerm('')
+                    setPage(1)
+                  }}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                   title="Limpiar búsqueda"
                 >
@@ -310,7 +318,7 @@ export default function DashboardPage() {
               })}
             </select>
 
-            {/* Selector de Estado */}
+            {/* Selector de Estado (ordenado de grave a óptimo) */}
             <select
               value={statusFilter}
               onChange={(e) => {
@@ -321,9 +329,9 @@ export default function DashboardPage() {
               className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               <option value="all">Todos los estados</option>
-              <option value="ok">Operativos</option>
-              <option value="out_of_range">Fuera de Rango</option>
               <option value="no_data">Desconectados</option>
+              <option value="out_of_range">Fuera de Rango</option>
+              <option value="ok">Operativos</option>
             </select>
           </div>
         </div>
@@ -438,7 +446,7 @@ export default function DashboardPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleOpenChartModal(sensor)}
+                          onClick={() => navigate(`/sensors/${sensor.id}`)}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
                         >
                           <LineChart className="w-3.5 h-3.5" />
@@ -458,7 +466,7 @@ export default function DashboardPage() {
           <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>
               Página <strong className="text-slate-800 dark:text-slate-200">{page}</strong> de{' '}
-              <strong className="text-slate-800 dark:text-slate-200">{totalPages}</strong> ({totalSensorsCount} sensores)
+              <strong className="text-slate-800 dark:text-slate-200">{totalPages}</strong> ({sortedAndFilteredSensors.length} sensores)
             </span>
             <div className="flex items-center gap-1.5">
               <button
@@ -481,80 +489,6 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-
-      {/* Modal flotante interactivo con Recharts para el Dashboard */}
-      {modalSensor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-3xl p-6 shadow-2xl relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-bold text-slate-400">Sensor #{modalSensor.id}</span>
-                  {modalSensor.site_id && (
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      • {siteNames[String(modalSensor.site_id)] || `Centro #${modalSensor.site_id}`}
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <LineChart className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  {modalSensor.name} - Historial de Oxígeno (Recharts)
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModalSensor(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                aria-label="Cerrar modal"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="py-4">
-              {modalLoading ? (
-                <div className="py-20 flex flex-col items-center justify-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-2" />
-                  <p className="text-xs font-medium text-slate-400">Cargando mediciones...</p>
-                </div>
-              ) : modalError ? (
-                <div className="py-16 text-center text-sm text-rose-600 dark:text-rose-400 font-medium">
-                  {modalError}
-                </div>
-              ) : (
-                <OxygenHistoryChart
-                  data={modalMeasurements}
-                  oxygenMin={modalSensor.oxygen_min}
-                  oxygenMax={modalSensor.oxygen_max}
-                  isOffline={modalSensor.status === 'no_data'}
-                />
-              )}
-            </div>
-
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  const sid = modalSensor.id
-                  setModalSensor(null)
-                  navigate(`/sensors/${sid}`)
-                }}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-              >
-                <span>Ir al detalle completo del sensor</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalSensor(null)}
-                className="px-4 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
