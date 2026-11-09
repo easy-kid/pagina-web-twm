@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -8,8 +8,9 @@ import {
   AlertCircle,
   Building,
   RefreshCw,
+  Activity,
 } from '../components/Common/Icons'
-import { sensorService } from '../services/sensorService'
+import { sensorService, formatChileDateTime } from '../services/sensorService'
 import { siteService } from '../services/siteService'
 import NotFoundPage from '../components/NotFoundPage'
 import { isNotFoundError } from '../api/client'
@@ -68,6 +69,14 @@ export default function SensorDetailPage() {
 
   const isOutOfRange = sensor?.status === 'out_of_range'
   const isNoData = sensor?.status === 'no_data'
+
+  const lastReadingTime = useMemo(() => {
+    const at = sensor?.last_reading?.at || measurements[measurements.length - 1]?.rawTimestamp
+    if (at) {
+      return formatChileDateTime(at)
+    }
+    return null
+  }, [sensor, measurements])
 
   if (notFound) {
     return <NotFoundPage message="La API no encontró el sensor o el endpoint solicitado." />
@@ -188,22 +197,65 @@ export default function SensorDetailPage() {
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Historial de mediciones</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Oxígeno disuelto registrado por el sensor (mg/L).
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Activity className={`w-5 h-5 ${isNoData ? 'text-slate-400' : 'text-blue-600 dark:text-blue-400'}`} />
+              Historial de mediciones
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {isNoData
+                ? 'Último bloque de telemetría registrado (Dispositivo fuera de línea / Transmisión interrumpida)'
+                : 'Oxígeno disuelto registrado por el sensor (mg/L).'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isNoData && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 px-2.5 py-0.5 rounded-full">
+                <WifiOff className="w-3 h-3 text-rose-500" />
+                Histórico Congelado
+              </span>
+            )}
+            {measurements.length > 0 && (
+              <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">
+                {measurements.length} muestras renderizadas
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Banner Informativo de Desconexión Operacional */}
+        {isNoData && (
+          <div className="mb-5 p-4 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 flex items-start gap-3">
+            <WifiOff className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs leading-relaxed">
+              <p className="font-semibold text-amber-900 dark:text-amber-200">
+                Dispositivo Actualmente Fuera de Línea (Sin Transmisión en Vivo)
+              </p>
+              <p className="text-amber-800/90 dark:text-amber-300/90 mt-0.5">
+                La gráfica refleja las últimas mediciones archivadas en el servidor previo a la interrupción de la señal
+                {lastReadingTime ? ` (último registro: ${lastReadingTime})` : ''}.
+                No se están recibiendo paquetes de datos en tiempo real de este nodo.
+              </p>
+            </div>
+          </div>
+        )}
+
         {measurementError ? (
           <p className="mt-5 text-sm text-rose-700 dark:text-rose-300" role="alert">
             {measurementError}
           </p>
         ) : measurements.length === 0 ? (
-          <p className="mt-5 text-sm text-slate-500 dark:text-slate-400">
-            No hay mediciones disponibles para este sensor.
-          </p>
+          <div className="text-center py-16 text-slate-400 dark:text-slate-500 flex flex-col items-center gap-2">
+            <WifiOff className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+            <p className="text-sm font-medium">
+              {isNoData
+                ? 'No existen registros de telemetría previos para este sensor inactivo.'
+                : 'No hay mediciones disponibles para este sensor.'}
+            </p>
+          </div>
         ) : (
-          <div className="mt-5">
+          <div className="py-2">
             <OxygenHistoryChart
               data={measurements}
               oxygenMin={sensor?.oxygen_min}
