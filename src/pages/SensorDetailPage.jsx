@@ -124,18 +124,19 @@ export default function SensorDetailPage() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs transition-colors">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-xs font-bold text-slate-400 dark:text-slate-500">Sensor #{sensor?.id}</span>
-              {sensor?.site_id && (
+            {sensor?.site_id && (
+              <div className="flex items-center gap-2 mb-1.5">
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-md">
                   <Building className="w-3 h-3 text-slate-400" />
                   {site?.name || `Centro ${sensor.site_id}`}
-                  <span className="ml-1 font-normal text-slate-500 dark:text-slate-400">
-                    (ID: {sensor.site_id}{siteNameError ? ' · nombre no disponible' : ''})
-                  </span>
+                  {siteNameError && (
+                    <span className="ml-1 font-normal text-slate-500 dark:text-slate-400">
+                      (nombre no disponible)
+                    </span>
+                  )}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{sensor?.name}</h1>
           </div>
 
