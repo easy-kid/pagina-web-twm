@@ -555,7 +555,9 @@ export default function InterventionsPage() {
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <p className="text-sm font-medium text-slate-500 dark:text-slate-400" aria-live="polite">
-                  {visibleInterventions.length} de {interventions.length} solicitudes
+                  {visibleInterventions.length === interventions.length
+                    ? `${interventions.length} solicitudes en total`
+                    : `Mostrando ${visibleInterventions.length} de ${interventions.length} solicitudes`}
                 </p>
                 <button
                   type="button"

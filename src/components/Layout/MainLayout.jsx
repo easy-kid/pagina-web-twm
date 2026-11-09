@@ -12,7 +12,6 @@ import {
   ClipboardCheck,
   LogOut,
   Menu,
-  Radio,
   X,
 } from '../Common/Icons'
 import ThemeToggle from '../Theme/ThemeToggle'
@@ -63,11 +62,6 @@ export default function MainLayout() {
       to: '/sites',
       label: 'Centros de cultivo',
       icon: Building,
-    },
-    {
-      to: '/sensors',
-      label: 'Sensores',
-      icon: Radio,
     },
     {
       to: '/interventions',

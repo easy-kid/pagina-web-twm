@@ -11,6 +11,7 @@ import {
   Search,
   ClipboardCheck,
   LineChart,
+  RefreshCw,
 } from '../components/Common/Icons'
 import { sensorService, formatChileDateTime } from '../services/sensorService'
 import { getSiteId, siteService } from '../services/siteService'
@@ -48,6 +49,7 @@ export default function DashboardPage() {
   const [sensors, setSensors] = useState([])
   const [loadingSensors, setLoadingSensors] = useState(true)
   const [sensorError, setSensorError] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
 
   // 4. Estados de filtros y paginación
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'out_of_range' | 'no_data' | 'ok'
@@ -125,6 +127,15 @@ export default function DashboardPage() {
     loadSensors()
   }, [loadSensors])
 
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await Promise.all([loadMetrics(), loadSensors()])
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   // Filtrado y ordenamiento de sensores: siempre de más grave a óptimo
   const sortedAndFilteredSensors = useMemo(() => {
     return sensors
@@ -158,6 +169,32 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-7">
+      {/* Encabezado Principal */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+            Panel de Control
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white md:text-3xl">
+            Dashboard
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Monitoreo en tiempo real de telemetría de oxígeno y estado operativo de sensores.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing || loadingSensors}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>Actualizar Datos</span>
+          </button>
+        </div>
+      </header>
 
       {/* Tarjetas de Métricas KPI */}
       {metricsError && (
