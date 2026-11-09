@@ -156,16 +156,10 @@ export default function DashboardPage() {
     return sortedAndFilteredSensors.slice(startIndex, startIndex + pageSize)
   }, [sortedAndFilteredSensors, page, pageSize])
 
-  // Al hacer clic en una tarjeta, filtra la tabla directamente por ese estado
-  const handleCardClick = (targetStatus) => {
-    setStatusFilter(targetStatus)
-    setPage(1)
-  }
-
   return (
     <div className="space-y-7">
 
-      {/* Tarjetas de Resumen Interactivas */}
+      {/* Tarjetas de Métricas KPI */}
       {metricsError && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300" role="alert">
           {metricsError}{' '}
@@ -183,7 +177,6 @@ export default function DashboardPage() {
             count: metrics.offlineCount,
             icon: WifiOff,
             subtext: 'Inactivos (>90 min)',
-            activeClass: 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20',
             textColor: 'text-rose-600 dark:text-rose-400',
             iconBox: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400',
           },
@@ -193,7 +186,6 @@ export default function DashboardPage() {
             count: metrics.outOfRangeCount,
             icon: AlertTriangle,
             subtext: 'Oxígeno anómalo',
-            activeClass: 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20',
             textColor: 'text-amber-600 dark:text-amber-400',
             iconBox: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
           },
@@ -203,7 +195,6 @@ export default function DashboardPage() {
             count: metrics.normalCount,
             icon: CheckCircle2,
             subtext: 'Transmitiendo normal',
-            activeClass: 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20',
             textColor: 'text-emerald-600 dark:text-emerald-400',
             iconBox: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
           },
@@ -212,42 +203,35 @@ export default function DashboardPage() {
             label: 'Total Sensores',
             count: metrics.total,
             icon: Radio,
-            subtext: `${metrics.unknownCount} sin estado · Ver todos`,
-            activeClass: 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20',
-            textColor: 'text-slate-900 dark:text-white',
-            iconBox: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
+            subtext: metrics.unknownCount > 0 ? `${metrics.unknownCount} sin estado registrado` : 'Total general en el sistema',
+            textColor: 'text-blue-600 dark:text-blue-400',
+            iconBox: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
           },
         ].map((card) => {
-          const isSelected = statusFilter === card.id
           const Icon = card.icon
 
           return (
-            <button
+            <div
               key={card.id}
-              type="button"
-              onClick={() => handleCardClick(card.id)}
-              className={`text-left p-5 rounded-2xl border transition duration-150 cursor-pointer ${isSelected
-                ? card.activeClass
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
-                }`}
+              className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs transition-colors"
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <p className={`text-xs font-semibold uppercase tracking-wider ${isSelected ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                     {card.label}
                   </p>
-                  <h3 className={`text-3xl font-extrabold mt-1.5 ${isSelected ? 'text-white' : card.textColor}`}>
+                  <h3 className={`text-3xl font-extrabold mt-1.5 ${card.textColor}`}>
                     {card.count}
                   </h3>
                 </div>
-                <div className={`p-2.5 rounded-xl ${isSelected ? 'bg-white/20 text-white' : card.iconBox}`}>
+                <div className={`p-2.5 rounded-xl ${card.iconBox}`}>
                   <Icon className="w-5 h-5" />
                 </div>
               </div>
-              <p className={`text-xs mt-3 font-medium ${isSelected ? 'text-white/90' : card.textColor}`}>
+              <p className={`text-xs mt-3 font-medium ${card.textColor}`}>
                 {card.subtext}
               </p>
-            </button>
+            </div>
           )
         })}
       </div>
