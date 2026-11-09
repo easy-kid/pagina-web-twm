@@ -16,7 +16,6 @@ const SitesList = lazy(() =>
 )
 const InterventionsPage = lazy(() => import('./pages/InterventionsPage'))
 const SensorsPage = lazy(() => import('./pages/SensorsPage'))
-const MeasurementsPage = lazy(() => import('./pages/MeasurementsPage'))
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'))
 
 export default function App() {
@@ -43,7 +42,6 @@ export default function App() {
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/sensors/:id" element={<SensorDetailPage />} />
                 <Route path="/sensors" element={<SensorsPage />} />
-                <Route path="/measurements" element={<MeasurementsPage />} />
                 <Route path="/sites" element={<SitesList />} />
                 <Route path="/sites/:siteId" element={<SiteDetail />} />
                 <Route path="/interventions" element={<InterventionsPage />} />

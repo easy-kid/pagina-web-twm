@@ -46,13 +46,6 @@ const statusBorderColors = {
   unknown: 'border-slate-400 dark:border-slate-600',
 }
 
-const suggestionsByStatus = {
-  no_data: 'Se debe revisar la alimentación eléctrica, la conexión y la transmisión de datos del sensor.',
-  out_of_range: 'Se debe verificar la lectura en terreno, inspeccionar el sensor y calibrarlo si corresponde.',
-  ok: 'Se solicita realizar una inspección preventiva y confirmar que el sensor y sus conexiones estén en buen estado.',
-  unknown: 'Se debe inspeccionar el sensor y confirmar su estado y comunicación con el sistema.',
-}
-
 const formatDateTime = (value) => {
   const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
   if (!match) return value ? String(value) : 'Fecha no disponible'
@@ -62,9 +55,35 @@ const formatDateTime = (value) => {
 }
 
 const getChileWallTime = (value) => {
-  const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/)
+  const dateTime = String(value ?? '')
+  const match = dateTime.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/)
   if (!match) return Number.NaN
   const [, year, month, day, hour, minute, second = '0'] = match
+
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateTime)) {
+    const timestamp = Date.parse(dateTime)
+    if (!Number.isFinite(timestamp)) return Number.NaN
+    const parts = new Intl.DateTimeFormat('en', {
+      timeZone: 'America/Santiago',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(new Date(timestamp))
+    const values = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]))
+    return Date.UTC(
+      Number(values.year),
+      Number(values.month) - 1,
+      Number(values.day),
+      Number(values.hour),
+      Number(values.minute),
+      Number(values.second),
+    )
+  }
+
   return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second))
 }
 
@@ -115,9 +134,8 @@ const enrichInterventions = (interventions, sites) => {
       zone: intervention.zone || getSiteArea(site) || 'Sin zona',
       sensorName: intervention.sensorName || sensor?.name || '',
       sensorStatus: sensor?.status || 'unknown',
-      suggestedAction:
-        intervention.suggestedAction || intervention.reason || intervention.message || '',
-      message: intervention.message || '',
+      description: intervention.reason ||
+        [intervention.suggestedAction, intervention.message].filter(Boolean).join('\n\n'),
     }
   })
 }
@@ -145,12 +163,13 @@ export default function InterventionsPage() {
   )
   const [siteId, setSiteId] = useState(String(initialSelection.siteId ?? ''))
   const [sensorId, setSensorId] = useState(String(initialSelection.sensorId ?? ''))
-  const [suggestedAction, setSuggestedAction] = useState('')
-  const [message, setMessage] = useState('')
+  const [description, setDescription] = useState('')
   const [savedNotice, setSavedNotice] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [zoneFilter, setZoneFilter] = useState('all')
   const [timeFilter, setTimeFilter] = useState('all')
+  const [fromDateTime, setFromDateTime] = useState('')
+  const [toDateTime, setToDateTime] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [currentTime, setCurrentTime] = useState(0)
   const [formOpen, setFormOpen] = useState(Boolean(initialSelection.targetType))
@@ -170,6 +189,26 @@ export default function InterventionsPage() {
       setFormOpen(true)
     }
   }, [location.key, location.state])
+
+  useEffect(() => {
+    if (!formOpen) return undefined
+
+    const root = document.documentElement
+    const previousOverflow = root.style.overflow
+    const previousBodyPaddingRight = document.body.style.paddingRight
+    const scrollbarWidth = window.innerWidth - root.clientWidth
+    const bodyPaddingRight = Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0
+
+    root.style.overflow = 'hidden'
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${bodyPaddingRight + scrollbarWidth}px`
+    }
+
+    return () => {
+      root.style.overflow = previousOverflow
+      document.body.style.paddingRight = previousBodyPaddingRight
+    }
+  }, [formOpen])
 
   useEffect(() => {
     const dialog = formDialogRef.current
@@ -228,20 +267,6 @@ export default function InterventionsPage() {
   const statusClassName = statusBadgeColors[targetStatus] || statusBadgeColors.unknown
   const siteStatusClassName = statusBadgeColors[selectedSiteStatus] || statusBadgeColors.unknown
 
-  const statusSuggestion = useMemo(() => {
-    if (targetType === 'site') {
-      const problemStatuses = ['no_data', 'out_of_range']
-        .filter((status) => sensors.some((sensor) => sensor.status === status))
-      const statuses = problemStatuses.length ? problemStatuses : [targetStatus]
-      return [...new Set(statuses.map((status) => suggestionsByStatus[status]))].join('\n')
-    }
-    return suggestionsByStatus[targetStatus]
-  }, [sensors, targetStatus, targetType])
-
-  useEffect(() => {
-    setSuggestedAction(statusSuggestion)
-  }, [statusSuggestion])
-
   const nowText = formatCurrentChileDateTime()
   const siteAreas = useMemo(
     () => new Map(sites.map((site) => [String(site.id), getSiteArea(site) || 'Sin zona'])),
@@ -266,6 +291,9 @@ export default function InterventionsPage() {
       week: 7 * 24 * 60 * 60 * 1000,
       month: 30 * 24 * 60 * 60 * 1000,
     }
+    const fromTimestamp = fromDateTime ? getChileWallTime(fromDateTime) : null
+    const toTimestamp = toDateTime ? getChileWallTime(toDateTime) + 60 * 1000 - 1 : null
+    const validDateRange = fromTimestamp == null || toTimestamp == null || fromTimestamp <= toTimestamp
     const filtered = interventions.filter((intervention) => {
       const status = intervention.status || 'open'
       const zone = intervention.zone || siteAreas.get(String(intervention.siteId)) || 'Sin zona'
@@ -274,17 +302,22 @@ export default function InterventionsPage() {
       const age = currentTime - getChileWallTime(intervention.createdAt)
       const matchesTime = timeFilter === 'all' ||
         (currentTime > 0 && Number.isFinite(age) && age >= 0 && age <= timeFilterDurations[timeFilter])
+      const createdAt = getChileWallTime(intervention.createdAt)
+      const matchesDateTime = validDateRange &&
+        (fromTimestamp == null || (Number.isFinite(createdAt) && createdAt >= fromTimestamp)) &&
+        (toTimestamp == null || (Number.isFinite(createdAt) && createdAt <= toTimestamp))
       const searchContent = [
         intervention.siteName,
         intervention.sensorName,
         intervention.senderName,
         intervention.senderRole,
+        intervention.description,
         intervention.message,
         intervention.suggestedAction,
         zone,
       ].filter(Boolean).join(' ').toLocaleLowerCase('es-CL')
       const matchesSearch = !normalizedSearch || searchContent.includes(normalizedSearch)
-      return matchesStatus && matchesZone && matchesTime && matchesSearch
+      return matchesStatus && matchesZone && matchesTime && matchesDateTime && matchesSearch
     })
 
     return filtered.sort((left, right) => {
@@ -293,14 +326,19 @@ export default function InterventionsPage() {
       return leftStatus - rightStatus ||
         getChileWallTime(right.createdAt) - getChileWallTime(left.createdAt)
     })
-  }, [currentTime, interventions, searchTerm, siteAreas, statusFilter, timeFilter, zoneFilter])
+  }, [currentTime, fromDateTime, interventions, searchTerm, siteAreas, statusFilter, timeFilter, toDateTime, zoneFilter])
 
   const clearFilters = () => {
     setSearchTerm('')
     setStatusFilter('all')
     setZoneFilter('all')
     setTimeFilter('all')
+    setFromDateTime('')
+    setToDateTime('')
   }
+
+  const hasInvalidDateRange = fromDateTime && toDateTime &&
+    getChileWallTime(fromDateTime) > getChileWallTime(toDateTime)
 
   const handleTargetTypeChange = (nextType) => {
     setTargetType(nextType)
@@ -319,15 +357,13 @@ export default function InterventionsPage() {
 
     setSaving(true)
     try {
-      const reason = [suggestedAction.trim(), message.trim()].filter(Boolean).join('\n\n')
       await interventionService.createIntervention({
         siteId: selectedSite.id,
         sensorId: targetType === 'sensor' ? selectedSensor.id ?? selectedSensor._id : null,
-        reason,
+        reason: description.trim(),
       })
       setCurrentTime(getCurrentChileWallTime())
-      setSuggestedAction('')
-      setMessage('')
+      setDescription('')
       setSaveError('')
       setSavedNotice('Intervención abierta.')
       setFormOpen(false)
@@ -379,26 +415,28 @@ export default function InterventionsPage() {
             ref={formDialogRef}
             onClose={() => setFormOpen(false)}
             aria-labelledby="intervention-form-title"
-            className="m-auto max-h-[92vh] w-[calc(100%-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-0 text-left text-slate-900 shadow-2xl backdrop:bg-slate-950/60 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="m-auto max-h-[92vh] w-[calc(100%-1.5rem)] max-w-3xl overflow-y-auto overscroll-contain [scrollbar-gutter:stable] rounded-2xl border border-slate-200 bg-white p-0 text-left text-slate-900 shadow-2xl backdrop:bg-slate-950/60 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
           >
           <form onSubmit={handleSubmit} className="space-y-5 p-5 sm:p-6">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">
-                <ClipboardCheck className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="font-bold text-slate-900 dark:text-white">
-                  <span id="intervention-form-title">
-                  Nueva intervención
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">La fecha y hora se registran automáticamente.</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">
+                  <ClipboardCheck className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="font-bold text-slate-900 dark:text-white">
+                    <span id="intervention-form-title">
+                    Nueva intervención
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">La fecha y hora se registran automáticamente.</p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setFormOpen(false)}
                 aria-label="Cerrar formulario"
-                className="ml-auto rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                className="ml-2 shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -497,14 +535,8 @@ export default function InterventionsPage() {
             </div>
 
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-              Revisión sugerida según el estado
-              <textarea required value={suggestedAction} onChange={(event) => setSuggestedAction(event.target.value)} rows={3} maxLength={1000} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
-              <span className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">Se completa automáticamente según el estado y puedes editarla.</span>
-            </label>
-
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-              Indicaciones adicionales para el técnico
-              <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={4} maxLength={2000} placeholder="Describe qué debe revisar, dónde acudir o cualquier detalle útil..." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
+              Descripción para el técnico
+              <textarea required value={description} onChange={(event) => setDescription(event.target.value)} rows={5} maxLength={3000} placeholder="Describe qué debe revisar, dónde acudir y cualquier detalle útil en un solo texto..." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
             </label>
 
             {saveError && <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">{saveError}</p>}
@@ -528,8 +560,7 @@ export default function InterventionsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setSuggestedAction(statusSuggestion)
-                    setMessage('')
+                    setDescription('')
                     setSaveError('')
                     setSavedNotice('')
                     setFormOpen(true)
@@ -541,7 +572,7 @@ export default function InterventionsPage() {
                 </button>
               </div>
             </div>
-            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2 xl:grid-cols-[minmax(13rem,2fr)_repeat(3,minmax(9rem,1fr))_auto] dark:border-slate-800 dark:bg-slate-900">
+            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(13rem,2fr)_repeat(5,minmax(9rem,1fr))_auto] dark:border-slate-800 dark:bg-slate-900">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 sm:col-span-2 xl:col-span-1">
                 Buscar
                 <span className="relative mt-1.5 block">
@@ -570,6 +601,26 @@ export default function InterventionsPage() {
                 </select>
               </label>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Desde (fecha y hora)
+                <input
+                  type="datetime-local"
+                  value={fromDateTime}
+                  max={toDateTime || undefined}
+                  onChange={(event) => setFromDateTime(event.target.value)}
+                  className="mt-1.5 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-normal text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Hasta (fecha y hora)
+                <input
+                  type="datetime-local"
+                  value={toDateTime}
+                  min={fromDateTime || undefined}
+                  onChange={(event) => setToDateTime(event.target.value)}
+                  className="mt-1.5 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-normal text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                 Estado
                 <select
                   value={statusFilter}
@@ -596,13 +647,18 @@ export default function InterventionsPage() {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  disabled={!searchTerm && statusFilter === 'all' && zoneFilter === 'all' && timeFilter === 'all'}
+                  disabled={!searchTerm && statusFilter === 'all' && zoneFilter === 'all' && timeFilter === 'all' && !fromDateTime && !toDateTime}
                   className="w-full whitespace-nowrap rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   Limpiar filtros
                 </button>
               </div>
             </div>
+            {hasInvalidDateRange && (
+              <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">
+                La fecha y hora «Desde» debe ser anterior o igual a «Hasta».
+              </p>
+            )}
             {visibleInterventions.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
                 <ClipboardCheck className="mx-auto h-8 w-8 text-slate-400" />
@@ -643,8 +699,7 @@ export default function InterventionsPage() {
                         {getStatusLabel(intervention.sensorStatus)}
                       </span>
                     </div>
-                    <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">{intervention.suggestedAction}</p>
-                    {intervention.message && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{intervention.message}</p>}
+                    <p className="mt-3 whitespace-pre-wrap text-sm font-medium text-slate-700 dark:text-slate-200">{intervention.description}</p>
                     {intervention.senderName && (
                       <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
                         Solicitó {intervention.senderName}
