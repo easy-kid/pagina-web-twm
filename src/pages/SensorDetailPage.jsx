@@ -571,16 +571,16 @@ export default function SensorDetailPage() {
             </p>
           </div>
 
-          <div className="flex flex-col items-start md:items-end gap-2 shrink-0">
+          <div className="flex flex-col items-stretch gap-2 shrink-0 w-full sm:w-[464px]">
             {/* Selector de Rango Temporal y Fecha Exacta */}
-            <div className="w-full self-stretch flex items-center justify-between rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80 shadow-xs">
+            <div className="w-full flex items-center justify-between gap-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80 shadow-xs">
               {TIME_RANGES.map((range) => (
                 <button
                   key={range.id}
                   type="button"
                   onClick={() => handleRangeChange(range.id)}
                   disabled={loadingMeasurements}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition duration-150 cursor-pointer disabled:opacity-50 ${
+                  className={`flex-1 px-2.5 py-1 text-xs font-semibold rounded-lg transition duration-150 cursor-pointer disabled:opacity-50 text-center whitespace-nowrap ${
                     timeRange === range.id
                       ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -593,13 +593,13 @@ export default function SensorDetailPage() {
                 type="button"
                 onClick={() => handleRangeChange('custom')}
                 disabled={loadingMeasurements}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition duration-150 cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5 ${
+                className={`flex-1 px-2.5 py-1 text-xs font-semibold rounded-lg transition duration-150 cursor-pointer disabled:opacity-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap ${
                   timeRange === 'custom'
                     ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                <CalendarIcon className="w-3.5 h-3.5" />
+                <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
                 <span>Fecha Exacta</span>
               </button>
             </div>
