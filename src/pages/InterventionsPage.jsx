@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Building, ClipboardCheck, Radio, Search, X } from '../components/Common/Icons'
+import { Building, ChevronLeft, ChevronRight, ClipboardCheck, Radio, Search, X } from '../components/Common/Icons'
 import { getSiteArea, getSiteId, siteService } from '../services/siteService'
 import { interventionService } from '../services/interventionService'
 import { isNotFoundError } from '../api/client'
@@ -46,6 +46,8 @@ const statusBorderColors = {
   unknown: 'border-slate-400 dark:border-slate-600',
 }
 
+const pageSize = 10
+
 const formatDateTime = (value) => {
   const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
   if (!match) return value ? String(value) : 'Fecha no disponible'
@@ -85,29 +87,6 @@ const getChileWallTime = (value) => {
   }
 
   return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second))
-}
-
-const getCurrentChileWallTime = () => {
-  const parts = new Intl.DateTimeFormat('en', {
-    timeZone: 'America/Santiago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date())
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
-
-  return Date.UTC(
-    Number(values.year),
-    Number(values.month) - 1,
-    Number(values.day),
-    Number(values.hour),
-    Number(values.minute),
-    Number(values.second),
-  )
 }
 
 const formatCurrentChileDateTime = () =>
@@ -167,16 +146,11 @@ export default function InterventionsPage() {
   const [savedNotice, setSavedNotice] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [zoneFilter, setZoneFilter] = useState('all')
-  const [timeFilter, setTimeFilter] = useState('all')
   const [fromDateTime, setFromDateTime] = useState('')
   const [toDateTime, setToDateTime] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
-  const [currentTime, setCurrentTime] = useState(0)
+  const [page, setPage] = useState(1)
   const [formOpen, setFormOpen] = useState(Boolean(initialSelection.targetType))
-
-  useEffect(() => {
-    setCurrentTime(getCurrentChileWallTime())
-  }, [])
 
   useEffect(() => {
     const selection = location.state
@@ -285,12 +259,6 @@ export default function InterventionsPage() {
   )
   const visibleInterventions = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLocaleLowerCase('es-CL')
-    const timeFilterDurations = {
-      hour: 60 * 60 * 1000,
-      day: 24 * 60 * 60 * 1000,
-      week: 7 * 24 * 60 * 60 * 1000,
-      month: 30 * 24 * 60 * 60 * 1000,
-    }
     const fromTimestamp = fromDateTime ? getChileWallTime(fromDateTime) : null
     const toTimestamp = toDateTime ? getChileWallTime(toDateTime) + 60 * 1000 - 1 : null
     const validDateRange = fromTimestamp == null || toTimestamp == null || fromTimestamp <= toTimestamp
@@ -299,9 +267,6 @@ export default function InterventionsPage() {
       const zone = intervention.zone || siteAreas.get(String(intervention.siteId)) || 'Sin zona'
       const matchesStatus = statusFilter === 'all' || status === statusFilter
       const matchesZone = zoneFilter === 'all' || zone === zoneFilter
-      const age = currentTime - getChileWallTime(intervention.createdAt)
-      const matchesTime = timeFilter === 'all' ||
-        (currentTime > 0 && Number.isFinite(age) && age >= 0 && age <= timeFilterDurations[timeFilter])
       const createdAt = getChileWallTime(intervention.createdAt)
       const matchesDateTime = validDateRange &&
         (fromTimestamp == null || (Number.isFinite(createdAt) && createdAt >= fromTimestamp)) &&
@@ -317,7 +282,7 @@ export default function InterventionsPage() {
         zone,
       ].filter(Boolean).join(' ').toLocaleLowerCase('es-CL')
       const matchesSearch = !normalizedSearch || searchContent.includes(normalizedSearch)
-      return matchesStatus && matchesZone && matchesTime && matchesDateTime && matchesSearch
+      return matchesStatus && matchesZone && matchesDateTime && matchesSearch
     })
 
     return filtered.sort((left, right) => {
@@ -326,13 +291,25 @@ export default function InterventionsPage() {
       return leftStatus - rightStatus ||
         getChileWallTime(right.createdAt) - getChileWallTime(left.createdAt)
     })
-  }, [currentTime, fromDateTime, interventions, searchTerm, siteAreas, statusFilter, timeFilter, toDateTime, zoneFilter])
+  }, [fromDateTime, interventions, searchTerm, siteAreas, statusFilter, toDateTime, zoneFilter])
+  const totalPages = Math.max(1, Math.ceil(visibleInterventions.length / pageSize))
+  const paginatedInterventions = useMemo(() => {
+    const startIndex = (page - 1) * pageSize
+    return visibleInterventions.slice(startIndex, startIndex + pageSize)
+  }, [page, visibleInterventions])
+
+  useEffect(() => {
+    setPage(1)
+  }, [fromDateTime, searchTerm, statusFilter, toDateTime, zoneFilter])
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
 
   const clearFilters = () => {
     setSearchTerm('')
     setStatusFilter('all')
     setZoneFilter('all')
-    setTimeFilter('all')
     setFromDateTime('')
     setToDateTime('')
   }
@@ -362,11 +339,11 @@ export default function InterventionsPage() {
         sensorId: targetType === 'sensor' ? selectedSensor.id ?? selectedSensor._id : null,
         reason: description.trim(),
       })
-      setCurrentTime(getCurrentChileWallTime())
       setDescription('')
       setSaveError('')
       setSavedNotice('Intervención abierta.')
       setFormOpen(false)
+      setPage(1)
       try {
         const latest = await interventionService.getInterventions()
         setInterventions(enrichInterventions(latest, sites))
@@ -415,7 +392,7 @@ export default function InterventionsPage() {
             ref={formDialogRef}
             onClose={() => setFormOpen(false)}
             aria-labelledby="intervention-form-title"
-            className="m-auto max-h-[92vh] w-[calc(100%-1.5rem)] max-w-3xl overflow-y-auto overscroll-contain [scrollbar-gutter:stable] rounded-2xl border border-slate-200 bg-white p-0 text-left text-slate-900 shadow-2xl backdrop:bg-slate-950/60 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="m-auto max-h-[92vh] w-[calc(100%-1.5rem)] max-w-3xl overflow-y-auto overscroll-contain [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:rgb(203_213_225)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-button]:hidden [&::-webkit-scrollbar-button:vertical:decrement]:hidden [&::-webkit-scrollbar-button:vertical:increment]:hidden [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 rounded-2xl border border-slate-200 bg-white p-0 text-left text-slate-900 shadow-2xl backdrop:bg-slate-950/60 dark:[scrollbar-color:rgb(51_65_85)_transparent] dark:[&::-webkit-scrollbar-thumb]:bg-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
           >
           <form onSubmit={handleSubmit} className="space-y-5 p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3">
@@ -555,9 +532,7 @@ export default function InterventionsPage() {
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <p className="text-sm font-medium text-slate-500 dark:text-slate-400" aria-live="polite">
-                  {visibleInterventions.length === interventions.length
-                    ? `${interventions.length} solicitudes en total`
-                    : `Mostrando ${visibleInterventions.length} de ${interventions.length} solicitudes`}
+                  {visibleInterventions.length} de {interventions.length} solicitudes
                 </p>
                 <button
                   type="button"
@@ -589,21 +564,7 @@ export default function InterventionsPage() {
                 </span>
               </label>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                Hora
-                <select
-                  value={timeFilter}
-                  onChange={(event) => setTimeFilter(event.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-normal text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                >
-                  <option value="all">Cualquier fecha</option>
-                  <option value="hour">Última hora</option>
-                  <option value="day">Últimas 24 horas</option>
-                  <option value="week">Últimos 7 días</option>
-                  <option value="month">Últimos 30 días</option>
-                </select>
-              </label>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                Desde (fecha y hora)
+                Desde
                 <input
                   type="datetime-local"
                   value={fromDateTime}
@@ -613,7 +574,7 @@ export default function InterventionsPage() {
                 />
               </label>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                Hasta (fecha y hora)
+                Hasta
                 <input
                   type="datetime-local"
                   value={toDateTime}
@@ -649,7 +610,7 @@ export default function InterventionsPage() {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  disabled={!searchTerm && statusFilter === 'all' && zoneFilter === 'all' && timeFilter === 'all' && !fromDateTime && !toDateTime}
+                  disabled={!searchTerm && statusFilter === 'all' && zoneFilter === 'all' && !fromDateTime && !toDateTime}
                   className="w-full whitespace-nowrap rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   Limpiar filtros
@@ -670,7 +631,7 @@ export default function InterventionsPage() {
               </div>
             ) : (
               <ul className="space-y-3">
-                {visibleInterventions.map((intervention) => (
+                {paginatedInterventions.map((intervention) => (
                   <li
                     key={intervention.id}
                     className={`rounded-2xl border-2 bg-white p-4 shadow-sm dark:bg-slate-900 ${
@@ -711,6 +672,29 @@ export default function InterventionsPage() {
                 ))}
               </ul>
             )}
+            <nav className="flex items-center justify-between" aria-label="Paginación de intervenciones">
+              <span className="text-sm text-slate-500 dark:text-slate-400" aria-live="polite">
+                Página {page} de {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((value) => Math.max(1, value - 1))}
+                  disabled={page === 1}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700"
+                >
+                  <ChevronLeft className="h-4 w-4" /> Anterior
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+                  disabled={page >= totalPages}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700"
+                >
+                  Siguiente <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </nav>
           </section>
         </div>
       )}
