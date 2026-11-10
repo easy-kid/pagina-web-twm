@@ -480,11 +480,12 @@ export default function SensorDetailPage() {
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-md">
                   <Building className="w-3 h-3 text-slate-400" />
-                  {site?.name || `Centro ${sensor.site_id}`}
-                  {siteNameError && (
-                    <span className="ml-1 font-normal text-slate-500 dark:text-slate-400">
-                      (nombre no disponible)
-                    </span>
+                  {site?.name ? (
+                    site.name
+                  ) : siteNameError ? (
+                    `Centro ${sensor.site_id} (nombre no disponible)`
+                  ) : (
+                    <span className="inline-block h-3.5 w-24 bg-slate-200 dark:bg-slate-700/80 rounded animate-pulse align-middle" />
                   )}
                 </span>
               </div>

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -15,7 +15,6 @@ const SitesList = lazy(() =>
   import('./components/SitesList').then((module) => ({ default: module.SitesList })),
 )
 const InterventionsPage = lazy(() => import('./pages/InterventionsPage'))
-const SensorsPage = lazy(() => import('./pages/SensorsPage'))
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'))
 
 export default function App() {
@@ -41,7 +40,7 @@ export default function App() {
               >
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/sensors/:id" element={<SensorDetailPage />} />
-                <Route path="/sensors" element={<SensorsPage />} />
+                <Route path="/sensors" element={<Navigate to="/" replace />} />
                 <Route path="/sites" element={<SitesList />} />
                 <Route path="/sites/:siteId" element={<SiteDetail />} />
                 <Route path="/interventions" element={<InterventionsPage />} />
