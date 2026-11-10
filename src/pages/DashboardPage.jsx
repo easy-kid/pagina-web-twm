@@ -447,8 +447,8 @@ export default function DashboardPage() {
                         </span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex flex-wrap items-center justify-end gap-2">
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center justify-end gap-2">
                         <button
                           type="button"
                           disabled={sensor.site_id == null || sensor.id == null}
@@ -460,17 +460,17 @@ export default function DashboardPage() {
                               sensorId: String(sensor.id),
                             },
                           })}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-700 bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 hover:border-blue-700 rounded-lg shadow-xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap"
                         >
-                          <ClipboardCheck className="h-3.5 w-3.5" />
+                          <ClipboardCheck className="w-3.5 h-3.5 shrink-0" />
                           <span>Intervenir</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => navigate(`/sensors/${sensor.id}`)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200/60 dark:border-blue-800/50 rounded-lg transition cursor-pointer whitespace-nowrap"
                         >
-                          <LineChart className="w-3.5 h-3.5" />
+                          <LineChart className="w-3.5 h-3.5 shrink-0" />
                           <span>Ver Gráfico</span>
                         </button>
                       </div>

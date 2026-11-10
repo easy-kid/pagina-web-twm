@@ -28,6 +28,24 @@ export default function SiteInfoDialog({ site, onClose }) {
   useEffect(() => {
     const dialog = dialogRef.current
     if (dialog && !dialog.open) dialog.showModal()
+
+    const root = document.documentElement
+    const previousOverflow = root.style.overflow
+    const previousBodyPaddingRight = document.body.style.paddingRight
+    const scrollbarWidth = window.innerWidth - root.clientWidth
+    const bodyPaddingRight =
+      Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0
+
+    root.style.overflow = 'hidden'
+
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${bodyPaddingRight + scrollbarWidth}px`
+    }
+
+    return () => {
+      root.style.overflow = previousOverflow
+      document.body.style.paddingRight = previousBodyPaddingRight
+    }
   }, [])
 
   const sensors = (Array.isArray(site.sensors) ? site.sensors : [])
@@ -74,9 +92,6 @@ export default function SiteInfoDialog({ site, onClose }) {
               <h2 id="site-popup-title" className="mt-1 text-xl font-bold tracking-tight sm:text-2xl">
                 {site.name || 'Centro sin nombre'}
               </h2>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                ID: {getSiteId(site) ?? 'No disponible'}
-              </p>
             </div>
           </div>
           <button

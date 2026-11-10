@@ -472,12 +472,6 @@ export default function SensorDetailPage() {
         </div>
       </div>
 
-      {loadError && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300" role="status">
-          {loadError} Se muestran los últimos datos disponibles.
-        </div>
-      )}
-
       {/* Tarjeta de Información General del Sensor */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs transition-colors">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">

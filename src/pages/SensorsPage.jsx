@@ -109,9 +109,6 @@ export default function SensorsPage() {
       <header>
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Operación</p>
         <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white md:text-3xl">Sensores</h1>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Consulta sensores y filtra por centro y estado.
-        </p>
       </header>
 
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_13rem_13rem]">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Building, ChevronLeft, ChevronRight, ClipboardCheck, Radio, Search } from './Common/Icons'
-import { getSiteArea, getSiteId, siteService } from '../services/siteService'
+import { getSiteId, siteService } from '../services/siteService'
 import NotFoundPage from './NotFoundPage'
 import { isNotFoundError } from '../api/client'
 import SiteMap from './SiteMap'
@@ -73,7 +73,6 @@ export const SitesList = () => {
     }
   }, [areaFilter, page, pageSize, reloadKey, search])
 
-  const totalSensors = sites.reduce((total, site) => total + site.sensors.length, 0)
   const totalPages = Math.max(1, Math.ceil(totalSitesCount / pageSize))
   const canGoNext = hasTotalSitesCount
     ? page < totalPages
@@ -100,9 +99,6 @@ export const SitesList = () => {
         <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white md:text-3xl">
           Centros y sensores
         </h1>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Busca por centro o código, filtra por zona y revisa el estado de sus sensores.
-        </p>
       </header>
 
       {error ? (
@@ -151,13 +147,6 @@ export const SitesList = () => {
             </label>
           </div>
 
-          <p className="text-sm text-slate-500 dark:text-slate-400" aria-live="polite">
-            {hasTotalSitesCount
-              ? `${totalSitesCount} ${totalSitesCount === 1 ? 'centro' : 'centros'} · `
-              : ''}
-            {totalSensors} {totalSensors === 1 ? 'sensor' : 'sensores'} en esta página
-          </p>
-
           {sites.length > 0 && (
             <SiteMap sites={sites} title="Mapa de centros de cultivo" />
           )}
@@ -190,10 +179,6 @@ export const SitesList = () => {
                         <h2 className="truncate text-lg font-semibold text-slate-900 dark:text-white">
                           {site.name || 'Centro sin nombre'}
                         </h2>
-                        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-                          Código: {site.code || 'No especificado'} · Área: {getSiteArea(site) || 'No especificada'}
-                          {' · '}ID: {getSiteId(site) ?? 'No disponible'}
-                        </p>
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-3">
