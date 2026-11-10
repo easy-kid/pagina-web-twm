@@ -25,16 +25,8 @@ import ThemeToggle from '../Theme/ThemeToggle'
  */
 export default function MainLayout() {
   // Consumo de la sesión y método `logout` desde el AuthContext global
-  const { logout, username } = useAuth()
+  const { logout } = useAuth()
   const navigate = useNavigate()
-
-  // Nombre de usuario para presentación en la barra lateral
-  const userDisplayName = username || 'Operador'
-  // Iniciales para el avatar (ej. "operador1" -> "OP", "admin" -> "AD")
-  const userInitials = (userDisplayName.length >= 2
-    ? userDisplayName.slice(0, 2)
-    : userDisplayName
-  ).toUpperCase()
 
   // Estado local para abrir o contraer el menú en dispositivos móviles
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -140,19 +132,8 @@ export default function MainLayout() {
           })}
         </nav>
 
-        {/* Pie del Sidebar: Identificación de Usuario y Botón de Salir */}
+        {/* Pie del Sidebar: Botón de Salir */}
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-          <div className="flex items-center gap-3 mb-3 px-2">
-            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-semibold text-xs">
-              {userInitials}
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate" title={userDisplayName}>
-                {userDisplayName}
-              </p>
-            </div>
-          </div>
-
           <button
             type="button"
             onClick={handleLogout}
